@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF 地圖配準工具 (V15: 路燈登記單整合版)</title>
+    <title>台電送件小幫手</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -13,140 +13,247 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <style>
-        body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: "Microsoft JhengHei", sans-serif; overflow: hidden; }
+        /* V21: Professional Slate & Blue Theme (極簡專業風格) */
+        :root {
+            --bg-body: #ebedef;        /* 淺灰底色 */
+            --bg-sidebar: #ffffff;     /* 純白側邊欄 */
+            --text-primary: #2c3e50;   /* 深灰藍文字 */
+            --text-secondary: #7f8c8d; /* 次要文字 */
+            
+            /* 統一色系，不再使用繽紛色 */
+            --color-brand: #2c3e50;    /* 品牌主色 (深岩灰) */
+            --color-accent: #2980b9;   /* 連結/亮點色 (專業藍) */
+            --color-danger: #c0392b;   /* 警示色 (暗紅) */
+            --color-success: #27ae60;  /* 成功色 (森林綠) */
+            --color-neutral: #95a5a6;  /* 中性色 (灰) */
+            
+            --border-light: #dfe6e9;
+        }
+
+        body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: "Segoe UI", "Microsoft JhengHei", sans-serif; overflow: hidden; color: var(--text-primary); background: var(--bg-body); }
         
+        /* 側邊欄樣式 */
         .sidebar { 
-            width: 360px; background: #f8f9fa; padding: 15px; 
+            width: 360px; background: var(--bg-sidebar); padding: 20px; 
             display: flex; flex-direction: column; overflow-y: auto; z-index: 1000; 
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1); 
-            transition: transform 0.3s ease; position: relative;
+            box-shadow: 4px 0 15px rgba(0,0,0,0.08); 
+            transition: transform 0.3s ease; position: relative; flex-shrink: 0;
+            border-right: 1px solid var(--border-light);
         }
         .sidebar.collapsed { transform: translateX(-360px); margin-right: -360px; }
         
-        .toggle-btn {
-            position: absolute; top: 10px; right: -40px;
-            width: 40px; height: 40px; background: #007bff; color: white;
-            border: none; border-radius: 0 5px 5px 0; cursor: pointer;
-            font-size: 20px; display: flex; align-items: center; justify-content: center;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.2); z-index: 2000;
+        .sidebar h3 {
+            margin-top: 0; padding-bottom: 15px; border-bottom: 2px solid var(--color-brand);
+            color: var(--color-brand); font-weight: 800; font-size: 18px; letter-spacing: 0.5px;
+            display: flex; align-items: center; gap: 8px;
         }
 
-        .section { margin-bottom: 20px; border: 1px solid #ddd; padding: 10px; background: white; border-radius: 5px; }
-        label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; }
-        button { width: 100%; padding: 8px; margin-top: 5px; cursor: pointer; border: none; border-radius: 3px; color: white; background: #6c757d; }
-        button:hover { opacity: 0.9; }
-        button.primary { background: #007bff; }
-        button.success { background: #28a745; }
-        button.warning { background: #ffc107; color: #333; }
-        button.info { background: #17a2b8; }
-        button.danger { background: #dc3545; }
-        button.active { background: #0056b3; border: 2px solid #000; }
-        
-        #map { flex: 1; height: 100%; z-index: 0; cursor: crosshair; }
-        
-        .handle-icon { background: rgba(255, 255, 255, 0.9); border: 2px solid #333; border-radius: 50%; cursor: nwse-resize; }
-        .move-handle-icon { background: rgba(0, 123, 255, 0.9); border: 2px solid white; border-radius: 4px; color: white; text-align: center; font-size: 16px; line-height: 18px; cursor: move; }
-        .drag-point-icon { background: #007bff; border: 1px solid white; border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.5); cursor: move; }
+        .toggle-btn {
+            position: absolute; top: 15px; right: -40px;
+            width: 40px; height: 40px; background: var(--color-brand); color: white;
+            border: none; border-radius: 0 4px 4px 0; cursor: pointer;
+            font-size: 20px; display: flex; align-items: center; justify-content: center;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1); z-index: 2000;
+        }
 
-        .status-msg { font-size: 12px; color: #d63384; margin-top: 5px; font-weight: bold; line-height: 1.4; }
-        .lock-control { display: flex; align-items: center; margin-top: 10px; background: #e9ecef; padding: 5px; border-radius: 4px; }
-        .lock-control input { margin-right: 8px; transform: scale(1.2); }
+        /* 區塊樣式 - V21: 統一左側邊框顏色 */
+        .section { 
+            margin-bottom: 18px; border: 1px solid var(--border-light); 
+            padding: 15px; background: #fdfdfd; border-radius: 6px; 
+            border-left: 4px solid var(--color-brand); /* 統一使用深岩灰 */
+            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+        }
+        
+        label { display: block; font-weight: 700; margin-bottom: 8px; font-size: 13px; color: var(--text-primary); }
+        
+        /* 按鈕樣式統一 */
+        button { 
+            width: 100%; padding: 9px; margin-top: 8px; cursor: pointer; 
+            border: 1px solid transparent; border-radius: 4px; 
+            color: white; font-weight: 600; font-size: 13px; transition: all 0.2s;
+            background: var(--color-neutral); /* 預設灰色 */
+        }
+        button:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        button:active { transform: translateY(0); }
+
+        /* 功能性按鈕配色 */
+        button.primary { background: var(--color-brand); }   /* 深色主按鈕 */
+        button.action  { background: var(--color-accent); }  /* 藍色動作按鈕 */
+        button.success { background: var(--color-success); } /* 綠色成功按鈕 */
+        button.danger  { background: var(--color-danger); }  /* 紅色危險按鈕 */
+        button.outline { background: transparent; border: 1px solid var(--text-secondary); color: var(--text-secondary); }
+        button.outline:hover { background: #f1f1f1; color: var(--text-primary); }
+
+        #map { flex: 1; height: 100%; z-index: 0; cursor: crosshair; background: #e0e0e0; }
+        
+        /* 地圖控制點樣式 */
+        .handle-icon { background: rgba(255, 255, 255, 0.9); border: 1px solid #333; border-radius: 50%; cursor: nwse-resize; box-shadow: 0 0 4px rgba(0,0,0,0.3); }
+        .move-handle-icon { background: var(--color-brand); border: 2px solid white; border-radius: 4px; color: white; text-align: center; font-size: 16px; line-height: 18px; cursor: move; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+        .drag-point-icon { background: var(--color-accent); border: 2px solid white; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.4); cursor: move; }
+
+        .status-msg { font-size: 12px; color: var(--text-secondary); margin-top: 6px; font-weight: 600; line-height: 1.4; padding: 4px 0; border-top: 1px dashed var(--border-light); }
+        
         .scale-inputs { display: flex; gap: 10px; margin-top: 5px; }
         .scale-inputs div { flex: 1; }
-        .scale-inputs input { width: 100%; padding: 4px; font-size: 12px; }
+        .scale-inputs input { width: 100%; padding: 6px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
         
         .draw-tools { display: flex; gap: 5px; flex-wrap: wrap; }
-        .draw-tools button { flex: 1; min-width: 50px; font-size: 12px; }
-        .tool-options { display: flex; align-items: center; gap: 10px; margin-top: 5px; font-size: 12px; background: #eee; padding: 5px; border-radius: 4px; flex-wrap: wrap; }
+        .draw-tools button { flex: 1; min-width: 50px; font-size: 12px; background: #ecf0f1; color: var(--text-primary); border: 1px solid #bdc3c7; }
+        .draw-tools button.active { background: var(--color-brand); color: white; border-color: var(--color-brand); }
         
-        #debug-info { font-family: monospace; font-size: 11px; background: #333; color: #0f0; padding: 8px; margin-top: 10px; border-radius: 4px; display: none; word-break: break-all; }
-        .delete-btn { background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px; }
+        .tool-options { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #eee; }
+        
+        /* 懸浮編輯面板 - V21: 專業風格 */
+        #edit-panel {
+            position: absolute; top: 80px; left: 420px; width: 280px;
+            background: #ffffff; border: 1px solid #ccc; border-radius: 6px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            z-index: 2000; display: none; overflow: hidden;
+        }
+        .panel-header {
+            background: var(--color-brand); color: white; padding: 12px 15px;
+            font-size: 14px; font-weight: bold; cursor: move;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .panel-body { padding: 15px; background: #fff; }
+        .panel-body input, .panel-body select { 
+            width: 100%; margin-bottom: 12px; padding: 8px; box-sizing: border-box; 
+            border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 13px;
+        }
+        .radius-control { display: flex; align-items: center; gap: 8px; margin-bottom: 15px; background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #eee; }
+        .radius-control input[type="range"] { flex: 1; margin: 0; cursor: pointer; }
+        .radius-control input[type="number"] { width: 50px; margin: 0; text-align: center; border: 1px solid #ccc; }
 
-        /* 路燈編輯 Popup */
-        .sl-popup label { font-size: 12px; margin-bottom: 2px; color: #555; }
-        .sl-popup input, .sl-popup select { width: 100%; margin-bottom: 8px; padding: 4px; box-sizing: border-box; }
-        .sl-popup button { margin-top: 5px; padding: 4px; font-size: 12px; width: 48%; float: left; margin-right: 2%; }
+        .panel-buttons { display: flex; gap: 10px; margin-top: 5px; padding-top: 10px; border-top: 1px solid #f1f1f1; }
+        .close-panel-btn { background: transparent; border: none; color: rgba(255,255,255,0.7); cursor: pointer; font-size: 20px; padding: 0; line-height: 1; }
+        .close-panel-btn:hover { color: white; }
     </style>
 </head>
 <body>
 
 <div class="sidebar" id="sidebar">
     <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
-    <h3>⚡ 台電圖號配準工具 V15</h3>
+    <h3>⚡ 台電送件小幫手</h3>
 
     <div class="section">
-        <label>1. 上傳 PDF</label>
-        <input type="file" id="pdf-input" accept="application/pdf">
+        <label>1. 底圖設定 (PDF)</label>
+        <input type="file" id="pdf-input" accept="application/pdf" style="width:100%">
         <div id="auto-detect-msg" class="status-msg"></div>
-        <label style="margin-top:10px">白邊擴充係數:</label>
-        <div class="scale-inputs">
-            <div><label style="font-size:11px; margin:0;">↔️ 寬度倍率</label><input type="number" id="scale-x" value="1.24" step="0.01" onchange="recalcBounds()"></div>
-            <div><label style="font-size:11px; margin:0;">↕️ 高度倍率</label><input type="number" id="scale-y" value="1.42" step="0.01" onchange="recalcBounds()"></div>
+        <div style="margin-top:10px; display:flex; gap:10px;">
+            <div style="flex:1;">
+                <label style="font-size:11px; margin:0; color:var(--text-secondary);">白邊修正 (寬)</label>
+                <input type="number" id="scale-x" value="1.24" step="0.01" onchange="recalcBounds()" style="width:100%; padding:5px; border:1px solid #ccc; border-radius:3px;">
+            </div>
+            <div style="flex:1;">
+                <label style="font-size:11px; margin:0; color:var(--text-secondary);">白邊修正 (高)</label>
+                <input type="number" id="scale-y" value="1.42" step="0.01" onchange="recalcBounds()" style="width:100%; padding:5px; border:1px solid #ccc; border-radius:3px;">
+            </div>
         </div>
-        <label style="margin-top:10px">透明度:</label>
-        <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.6" style="width:100%">
-        <div class="lock-control">
-            <input type="checkbox" id="aspect-ratio-check" checked>
-            <label for="aspect-ratio-check" style="margin:0; cursor:pointer;">🔒 鎖定長寬比</label>
+        <label style="margin-top:12px; font-size:12px;">透明度:</label>
+        <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.6" style="width:100%; margin:0;">
+        
+        <div style="display:flex; align-items:center; margin-top:10px; font-size:12px;">
+            <input type="checkbox" id="aspect-ratio-check" checked style="margin-right:5px;">
+            <label for="aspect-ratio-check" style="margin:0; cursor:pointer; font-weight:normal;">鎖定長寬比</label>
         </div>
-        <button id="btn-lock" class="warning" onclick="toggleLock()" disabled>🔓 鎖定 / 解鎖 PDF</button>
-        <button class="info" onclick="showBoundsInfo()">📋 顯示邊界數據</button>
-        <div id="debug-info"></div>
+        
+        <div style="display:flex; gap:5px; margin-top:5px;">
+            <button id="btn-lock" class="outline" onclick="toggleLock()" disabled>🔒 鎖定位置</button>
+            <button class="outline" onclick="showBoundsInfo()">📋 邊界</button>
+        </div>
     </div>
     
-    <div class="section" style="border-left: 4px solid #007bff;">
-        <label>2. 匯入路燈資料 (CSV)</label>
-        <div style="font-size:11px;color:#666;margin-bottom:5px;">欄位: name, x, y, G-code_1st</div>
-        <input type="file" id="sl-csv-input" accept=".csv">
-        <div style="margin-top:5px;">
-            <select id="sl-encoding" style="font-size:12px;"><option value="UTF-8">UTF-8</option><option value="Big5">Big5</option></select>
-            <button onclick="clearStreetLights()" style="width:auto; float:right; padding:2px 8px; font-size:12px; background:#dc3545;">清除</button>
+    <div class="section">
+        <label>2. 路燈資料匯入 (CSV)</label>
+        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">欄位: name, x, y, G-code_1st</div>
+        <input type="file" id="sl-csv-input" accept=".csv" style="width:100%">
+        
+        <div style="margin-top:10px; display:flex; gap:5px; align-items:center;">
+            <select id="sl-encoding" style="font-size:12px; padding:4px; border:1px solid #ccc; border-radius:3px;"><option value="UTF-8">UTF-8</option><option value="Big5">Big5</option></select>
+            <div style="flex:1;"></div>
+            <button onclick="clearStreetLights()" style="width:auto; margin:0; padding:5px 10px; font-size:11px; background:var(--color-neutral);">清除</button>
         </div>
-        <div id="sl-status" style="font-size:12px; color:#007bff; margin-top:5px;"></div>
-        <button class="primary" onclick="exportRegistrationSheet()" style="margin-top:10px;">📊 匯出登記單 (Excel CSV)</button>
+        <div id="sl-status" style="font-size:12px; color:var(--color-accent); margin-top:5px; font-weight:bold;"></div>
+        
+        <button class="action" onclick="exportRegistrationSheet()" style="margin-top:10px;">📊 匯出登記單 (Excel)</button>
     </div>
 
-    <div class="section" style="border-left: 4px solid #6610f2;">
-        <label>3. 手動繪圖 (Draw)</label>
+    <div class="section">
+        <label>3. 參考 G-Code (綠點)</label>
+        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">* 匯出時自動帶入 G-W 到燈別欄</div>
+        <input type="file" id="ref-csv-input" accept=".csv" style="width:100%">
+        <div style="margin-top:10px; display:flex; gap:5px; align-items:center;">
+            <select id="csv-encoding" style="font-size:12px; padding:4px; border:1px solid #ccc; border-radius:3px;"><option value="UTF-8">UTF-8</option><option value="Big5">Big5</option></select>
+            <div style="flex:1;"></div>
+            <button onclick="clearRefMarkers()" style="width:auto; margin:0; padding:5px 10px; font-size:11px; background:var(--color-neutral);">清除</button>
+        </div>
+        <div id="ref-status" style="font-size:12px; color:var(--color-success); margin-top:5px; font-weight:bold;"></div>
+    </div>
+
+    <div class="section">
+        <label>4. 手動繪圖 (Draw)</label>
         <div class="draw-tools">
-            <button onclick="setDrawMode('circle')" id="btn-draw-circle">⭕ 畫圓</button>
-            <button onclick="setDrawMode('line')" id="btn-draw-line">➖ 畫線</button>
-            <button onclick="setDrawMode('text')" id="btn-draw-text">Aa 文字</button>
-            <button onclick="setDrawMode(null)" id="btn-draw-cancel" style="background:#ddd; color:#333;">✋ 停止</button>
+            <button onclick="setDrawMode('circle')" id="btn-draw-circle">⭕ 圓</button>
+            <button onclick="setDrawMode('line')" id="btn-draw-line">➖ 線</button>
+            <button onclick="setDrawMode('text')" id="btn-draw-text">Aa 字</button>
+            <button onclick="setDrawMode(null)" id="btn-draw-cancel" style="background:#e0e0e0; color:#555;">✋ 停止</button>
         </div>
         <div class="tool-options">
             <div style="display:flex; align-items:center; gap:5px;">
-                <label style="margin:0">顏色:</label>
-                <input type="color" id="input-color" value="#ff0000" style="width:30px; height:25px; padding:0; border:none; cursor:pointer;">
+                <span style="color:#666">顏色:</span>
+                <input type="color" id="input-color" value="#e74c3c" style="width:25px; height:25px; border:none; cursor:pointer; padding:0;">
             </div>
             <div style="display:flex; align-items:center; gap:5px;">
-                <label style="margin:0">字級:</label>
-                <input type="number" id="input-font-size" value="16" min="8" max="72" style="width:40px;">
-                <span>px</span>
+                <span style="color:#666">字級:</span>
+                <input type="number" id="input-font-size" value="16" min="8" max="72" style="width:40px; padding:2px; text-align:center; border:1px solid #ccc;">
             </div>
         </div>
-        <button onclick="clearDrawings()" style="background:#dc3545; margin-top:5px;">🗑️ 清除所有手繪</button>
+        <button onclick="clearDrawings()" class="danger" style="margin-top:10px;">🗑️ 清除所有手繪</button>
     </div>
 
-    <div class="section" style="border-left: 4px solid #28a745;">
-        <label>4. 參考 G-Code (綠點)</label>
-        <input type="file" id="ref-csv-input" accept=".csv">
-        <div style="margin-top:5px;">
-            <select id="csv-encoding" style="font-size:12px;"><option value="UTF-8">UTF-8</option><option value="Big5">Big5</option></select>
-            <button onclick="clearRefMarkers()" style="width:auto; float:right; padding:2px 8px; font-size:12px; background:#6c757d;">清除</button>
+    <div class="section" style="border-left:none; background:transparent; padding:0; box-shadow:none;">
+        <button class="primary" onclick="exportPDF()" style="font-size:15px; padding:12px; margin-bottom:10px;">💾 匯出圖層 PDF</button>
+        <div style="display:flex; gap:8px;">
+            <button class="outline" onclick="saveProject()" style="background:#fff;">📂 儲存專案</button>
+            <button class="outline" onclick="loadProjectClick()" style="background:#fff;">📂 載入專案</button>
         </div>
-        <div id="ref-status" style="font-size:12px; color:#28a745; margin-top:5px;"></div>
-    </div>
-
-    <div class="section">
-        <button class="success" onclick="exportPDF()">💾 匯出圖層 PDF</button>
-        <button class="primary" onclick="saveProject()">📂 儲存專案 (JSON)</button>
-        <button onclick="loadProjectClick()">📂 載入專案 (JSON)</button>
         <input type="file" id="project-input" accept=".json" style="display: none;">
     </div>
 </div>
 
 <div id="map"></div>
+
+<div id="edit-panel">
+    <div class="panel-header" id="panel-header">
+        <span>🛠️ 屬性編輯</span>
+        <button class="close-panel-btn" onclick="closeEditPanel()">×</button>
+    </div>
+    <div class="panel-body">
+        <label>G-code (座標):</label>
+        <input type="text" id="edit-gcode" placeholder="G0000...">
+        
+        <label>變更前容量:</label>
+        <input list="list-old-cap" id="edit-old" placeholder="例如: 73W">
+        
+        <label>變更後容量(VA):</label>
+        <input list="list-new-cap" id="edit-new" placeholder="例如: 73VA">
+
+        <label>紅圈半徑 (公尺):</label>
+        <div class="radius-control">
+            <input type="range" id="edit-radius-slider" min="1" max="20" step="0.5" value="7">
+            <input type="number" id="edit-radius-input" value="7" min="1" max="20" step="0.5">
+        </div>
+
+        <div class="panel-buttons">
+            <button id="btn-panel-save" class="action">確認更新</button>
+            <button id="btn-panel-reset" class="outline" style="color:var(--text-primary); border-color:#ccc;">恢復位置</button>
+        </div>
+        <div style="font-size:11px; color:var(--text-secondary); margin-top:10px; text-align:center;">
+            (提示: 面板開啟時可拖曳紅字)
+        </div>
+    </div>
+</div>
+
 <canvas id="text-helper-canvas" style="display:none;"></canvas>
 
 <datalist id="list-old-cap">
@@ -172,16 +279,22 @@
     
     let pdfOverlay = null;
     let pdfDocBytes = null;
-    let currentPdfName = "map"; // 儲存檔名用
+    let currentPdfName = "map"; 
     let boundsHandleNW, boundsHandleSE, boundsHandleCenter;
     let isLocked = false;
     let refMarkersLayer = L.layerGroup().addTo(map);
     let drawnItemsLayer = L.layerGroup().addTo(map);
-    let streetLightsLayer = L.layerGroup().addTo(map); // V15: 路燈專用層
-    let streetLightsData = []; // 儲存路燈資料物件
+    let streetLightsLayer = L.layerGroup().addTo(map);
+    let streetLightsData = []; 
+    let markersData = []; 
+    let refDataMap = {}; 
     let currentBaseBounds = null;
     let currentDrawMode = null;
     let tempDrawShape = null;
+
+    let currentEditingSL = null; 
+    const editPanel = document.getElementById('edit-panel');
+    const panelHeader = document.getElementById('panel-header');
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -190,7 +303,6 @@
         setTimeout(() => { map.invalidateSize(); }, 300);
     }
 
-    // --- Helper: Timestamp Name ---
     function getTimestampedName(baseName, ext) {
         const now = new Date();
         const yyyy = now.getFullYear();
@@ -206,7 +318,7 @@
     document.getElementById('pdf-input').addEventListener('change', async function(e) {
         const file = e.target.files[0];
         if (!file) return;
-        currentPdfName = file.name.replace(/\.[^/.]+$/, ""); // 去除副檔名
+        currentPdfName = file.name.replace(/\.[^/.]+$/, "");
         const rawBuffer = await file.arrayBuffer();
         pdfDocBytes = rawBuffer.slice(0);
         const displayBuffer = rawBuffer.slice(0);
@@ -351,11 +463,12 @@
     document.getElementById('opacity-slider').addEventListener('input', e => { if(pdfOverlay) pdfOverlay.setOpacity(e.target.value); });
     function showBoundsInfo() { if(pdfOverlay) alert(pdfOverlay.getBounds().toBBoxString()); }
 
-    // --- V15: Street Lights Import & Logic ---
+    // --- Street Lights Logic ---
     document.getElementById('sl-csv-input').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
         const encoding = document.getElementById('sl-encoding').value;
+        const inputElem = this;
         Papa.parse(file, {
             header: true, encoding: encoding, skipEmptyLines: true,
             complete: function(results) {
@@ -371,37 +484,43 @@
                             origLat: lat,
                             origLng: lng,
                             old_cap: "",
-                            new_cap: ""
+                            new_cap: "",
+                            radius: 7 
                         });
                         count++;
                     }
                 });
                 document.getElementById('sl-status').innerText = `✅ 已載入 ${count} 筆路燈`;
+                inputElem.value = ''; 
             }
         });
     });
 
     function createStreetLight(data) {
-        // 1. 藍色定位點 (Marker)
+        if(!data.radius) data.radius = 7;
+
+        // 1. Marker
         const marker = L.marker([data.lat, data.lng], {
-            icon: L.divIcon({className:'drag-point-icon', iconSize:[12,12], bgPos:[0,0]}), // 藍點
+            icon: L.divIcon({className:'drag-point-icon', iconSize:[12,12], bgPos:[0,0]}), 
             draggable: true
         }).addTo(streetLightsLayer);
 
-        // 2. 紅色圓圈 (Circle)
-        const circle = L.circle([data.lat, data.lng], {radius: 1, color:'red', weight:2}).addTo(streetLightsLayer);
+        marker.bindTooltip(`<b>${data.name}</b><br>${data.g_code}`, { offset: [0, -5], direction: 'top' });
 
-        // 3. 文字標籤 (Text) - 獨立可拖拉
+        // 2. Circle
+        const circle = L.circle([data.lat, data.lng], {radius: data.radius, color:'red', weight:2}).addTo(streetLightsLayer);
+
+        // 3. Text (V20/V21 Logic: -45 offset)
         const textLabel = L.marker([data.lat, data.lng], {
             icon: L.divIcon({ 
                 className: 'text-label', 
                 html: generateLabelHtml(data.name, data.new_cap), 
-                iconSize: [150, 20], iconAnchor: [0, 10]
+                iconSize: [150, 20], 
+                iconAnchor: [-45, 10] 
             }),
-            interactive: true, draggable: true
+            interactive: true, draggable: false 
         }).addTo(streetLightsLayer);
 
-        // 儲存關聯
         const slObj = {
             id: Date.now() + Math.random(),
             data: data,
@@ -409,88 +528,150 @@
         };
         streetLightsData.push(slObj);
 
-        // 連動邏輯
         marker.on('drag', e => {
             circle.setLatLng(e.latlng);
-            // 文字跟著動，保持相對位置 (簡單起見，直接跟著動，使用者可再微調文字)
             textLabel.setLatLng(e.latlng);
             slObj.data.lat = e.latlng.lat;
             slObj.data.lng = e.latlng.lng;
         });
 
-        // 編輯 Popup
-        marker.on('click', () => {
-            const content = document.createElement('div');
-            content.className = 'sl-popup';
-            content.innerHTML = `
-                <label>G-code:</label><input type="text" id="edit-gcode" value="${slObj.data.g_code}">
-                <label>變更前容量:</label><input list="list-old-cap" id="edit-old" value="${slObj.data.old_cap}">
-                <label>變更後容量(VA):</label><input list="list-new-cap" id="edit-new" value="${slObj.data.new_cap}">
-                <button id="btn-save" style="background:#28a745;color:white">確認更新</button>
-                <button id="btn-reset" style="background:#17a2b8;color:white">恢復座標</button>
-            `;
-            // Bind Events
-            content.querySelector('#btn-save').onclick = () => {
-                slObj.data.g_code = content.querySelector('#edit-gcode').value;
-                slObj.data.old_cap = content.querySelector('#edit-old').value;
-                slObj.data.new_cap = content.querySelector('#edit-new').value;
-                // 更新文字標籤
-                const newHtml = generateLabelHtml(slObj.data.name, slObj.data.new_cap);
-                slObj.layers.textLabel.setIcon(L.divIcon({ 
-                    className: 'text-label', html: newHtml, iconSize: [150, 20], iconAnchor: [0, 10]
-                }));
-                marker.closePopup();
-            };
-            content.querySelector('#btn-reset').onclick = () => {
-                const orig = L.latLng(slObj.data.origLat, slObj.data.origLng);
-                marker.setLatLng(orig);
-                circle.setLatLng(orig);
-                textLabel.setLatLng(orig);
-                slObj.data.lat = orig.lat; slObj.data.lng = orig.lng;
-                marker.closePopup();
-            };
-            marker.bindPopup(content).openPopup();
+        marker.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            openEditPanel(slObj);
         });
     }
 
     function generateLabelHtml(name, cap) {
-        const text = name + (cap ? (" " + cap) : "");
+        const text = name + (cap ? `(${cap})` : "");
         return `<div style="color:red;font-size:14px;font-weight:bold;text-shadow:1px 1px 0 #fff;white-space:nowrap;">${text}</div>`;
     }
 
-    function clearStreetLights() {
-        if(confirm("清除所有路燈資料?")) {
+    // --- Edit Panel & Radius Control ---
+    function openEditPanel(slObj) {
+        closeEditPanel();
+        currentEditingSL = slObj;
+        
+        document.getElementById('edit-gcode').value = slObj.data.g_code || "";
+        document.getElementById('edit-old').value = slObj.data.old_cap || "";
+        document.getElementById('edit-new').value = slObj.data.new_cap || "";
+        
+        const r = slObj.data.radius || 7;
+        document.getElementById('edit-radius-slider').value = r;
+        document.getElementById('edit-radius-input').value = r;
+
+        slObj.layers.textLabel.dragging.enable();
+        slObj.layers.textLabel.getElement().style.cursor = 'move';
+        slObj.layers.textLabel.getElement().style.border = '1px dashed red'; 
+
+        editPanel.style.display = 'block';
+    }
+
+    window.closeEditPanel = function() {
+        if (currentEditingSL) {
+            currentEditingSL.layers.textLabel.dragging.disable();
+            if(currentEditingSL.layers.textLabel.getElement()) {
+                currentEditingSL.layers.textLabel.getElement().style.cursor = '';
+                currentEditingSL.layers.textLabel.getElement().style.border = 'none';
+            }
+            currentEditingSL = null;
+        }
+        editPanel.style.display = 'none';
+    };
+
+    const rSlider = document.getElementById('edit-radius-slider');
+    const rInput = document.getElementById('edit-radius-input');
+    
+    function updateRadius(val) {
+        val = parseFloat(val);
+        rSlider.value = val;
+        rInput.value = val;
+        if(currentEditingSL) {
+            currentEditingSL.data.radius = val;
+            currentEditingSL.layers.circle.setRadius(val);
+        }
+    }
+    rSlider.oninput = function() { updateRadius(this.value); };
+    rInput.onchange = function() { updateRadius(this.value); };
+
+    document.getElementById('btn-panel-save').onclick = function() {
+        if (!currentEditingSL) return;
+        const slObj = currentEditingSL;
+        
+        slObj.data.g_code = document.getElementById('edit-gcode').value;
+        slObj.data.old_cap = document.getElementById('edit-old').value;
+        slObj.data.new_cap = document.getElementById('edit-new').value;
+
+        const newHtml = generateLabelHtml(slObj.data.name, slObj.data.new_cap);
+        slObj.layers.textLabel.setIcon(L.divIcon({ 
+            className: 'text-label', html: newHtml, iconSize: [150, 20], 
+            iconAnchor: [-45, 10] 
+        }));
+        
+        slObj.layers.marker.setTooltipContent(`<b>${slObj.data.name}</b><br>${slObj.data.g_code}`);
+        closeEditPanel();
+    };
+
+    document.getElementById('btn-panel-reset').onclick = function() {
+        if (!currentEditingSL) return;
+        const slObj = currentEditingSL;
+        const orig = L.latLng(slObj.data.origLat, slObj.data.origLng);
+        
+        slObj.layers.marker.setLatLng(orig);
+        slObj.layers.circle.setLatLng(orig);
+        slObj.layers.textLabel.setLatLng(orig);
+        slObj.data.lat = orig.lat; slObj.data.lng = orig.lng;
+        
+        closeEditPanel();
+    };
+
+    let isPanelDragging = false;
+    let panelOffsetX, panelOffsetY;
+    panelHeader.addEventListener('mousedown', (e) => {
+        isPanelDragging = true;
+        panelOffsetX = e.clientX - editPanel.offsetLeft;
+        panelOffsetY = e.clientY - editPanel.offsetTop;
+        document.body.style.userSelect = 'none'; 
+    });
+    document.addEventListener('mousemove', (e) => {
+        if (isPanelDragging) {
+            editPanel.style.left = (e.clientX - panelOffsetX) + 'px';
+            editPanel.style.top = (e.clientY - panelOffsetY) + 'px';
+        }
+    });
+    document.addEventListener('mouseup', () => { isPanelDragging = false; document.body.style.userSelect = ''; });
+
+    window.clearStreetLights = function(force = false) {
+        if(force || confirm("清除所有路燈資料?")) {
             streetLightsLayer.clearLayers();
             streetLightsData = [];
             document.getElementById('sl-status').innerText = "";
+            document.getElementById('sl-csv-input').value = ""; 
+            closeEditPanel();
         }
-    }
+    };
 
-    // V15: Export Registration Sheet (CSV)
     window.exportRegistrationSheet = function() {
         if(streetLightsData.length === 0) return alert("無路燈資料");
         
-        // Template Columns mapping
-        // 序號,變更前電號,變更後電號,行政區,裝設位置或地址,裝設地點座標,路燈編號(新),變更前燈別,變更前台帳容量,變更前台帳盞數,變更後燈別,變更後容量(VA),變更後盞數,服務所,受理號碼
         const csvRows = [];
-        // Header
         csvRows.push(["序號","變更前電號","變更後電號","行政區","裝設位置或地址","裝設地點座標","路燈編號(新)","變更前燈別","變更前台帳容量","變更前台帳盞數","變更後燈別","變更後容量(VA)","變更後盞數","服務所","受理號碼"]);
         
         streetLightsData.forEach((item, index) => {
             const d = item.data;
+            const matchedGW = refDataMap[d.g_code] || ""; 
+
             const row = [
-                index + 1, // 序號
-                "", "", "", "", // 前四項留白
-                d.g_code || "", // 裝設地點座標
-                d.name || "",   // 路燈編號(新)
-                "",             // 變更前燈別
-                d.old_cap || "", // 變更前台帳容量
-                "",             // 變更前台帳盞數
-                "",             // 變更後燈別
-                d.new_cap || "", // 變更後容量(VA)
-                "", "", ""      // 後三項留白
+                index + 1, 
+                "", "", "", "", 
+                d.g_code || "", 
+                d.name || "",   
+                matchedGW,          
+                d.old_cap || "", 
+                "",             
+                "",             
+                d.new_cap || "", 
+                "", "", ""      
             ];
-            // 處理 CSV 逗號與引號
             const safeRow = row.map(field => {
                 const s = String(field);
                 if (s.includes(",") || s.includes('"') || s.includes("\n")) {
@@ -501,7 +682,7 @@
             csvRows.push(safeRow.join(","));
         });
 
-        const csvContent = "\uFEFF" + csvRows.join("\n"); // BOM for Excel
+        const csvContent = "\uFEFF" + csvRows.join("\n"); 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const fname = getTimestampedName(currentPdfName + "_登記單", "csv");
@@ -510,7 +691,6 @@
         link.click();
     };
 
-    // --- Drawing Tools (Legacy V14) ---
     window.setDrawMode = function(mode) {
         currentDrawMode = mode;
         map.dragging.enable();
@@ -589,29 +769,45 @@
         startPoint = null; tempDrawShape = null; setDrawMode(null);
     });
 
-    // --- CSV Ref ---
     document.getElementById('ref-csv-input').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
         const encoding = document.getElementById('csv-encoding').value;
+        const inputElem = this;
         Papa.parse(file, {
             header: true, encoding: encoding, skipEmptyLines: true,
             complete: function(results) {
                 let count = 0;
+                refDataMap = {}; 
                 results.data.forEach(row => {
                     const lat = parseFloat(row['G-y']), lng = parseFloat(row['G-x']);
                     if (!isNaN(lat) && !isNaN(lng)) {
-                        L.circleMarker([lat, lng], { color: 'green', fillColor: '#90EE90', fillOpacity: 0.8, radius: 5 }).bindPopup(`<b>${row['G-code']}</b><br>${row['G-W']||''}`).addTo(refMarkersLayer);
+                        if(row['G-code']) {
+                            refDataMap[row['G-code']] = row['G-W'] || "";
+                        }
+                        const popupHtml = `
+                            <div style="font-size:14px; display:flex; align-items:center; gap:8px;">
+                                <b style="cursor:pointer; color:#2980b9; text-decoration:underline;" 
+                                   title="點擊複製" 
+                                   onclick="navigator.clipboard.writeText('${row['G-code']}').then(()=>alert('已複製: ${row['G-code']}'))">
+                                   ${row['G-code']}
+                                </b>
+                                <span style="font-size:12px; color:#666;">(點擊複製)</span>
+                            </div>
+                            <div style="margin-top:4px;">${row['G-W']||''}</div>
+                        `;
+                        L.circleMarker([lat, lng], { color: 'green', fillColor: '#90EE90', fillOpacity: 0.8, radius: 5 })
+                         .bindPopup(popupHtml).addTo(refMarkersLayer);
                         count++;
                     }
                 });
-                document.getElementById('ref-status').innerText = `✅ 已載入 ${count} 個`;
+                document.getElementById('ref-status').innerText = `✅ 已載入 ${count} 個 (含索引)`;
+                inputElem.value = ''; 
             }
         });
     });
-    function clearRefMarkers() { refMarkersLayer.clearLayers(); }
+    function clearRefMarkers() { refMarkersLayer.clearLayers(); refDataMap = {}; }
     
-    // --- Manual Markers ---
     function addMarkerToMap(lat, lng, name, category, id=null) {
         const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
         const dataId = id || Date.now().toString();
@@ -624,7 +820,6 @@
     function addManualMarker(){ addMarkerToMap(map.getCenter().lat, map.getCenter().lng, '新點', '一般'); }
     function clearMarkers(){ markersData.forEach(d=>map.removeLayer(d.markerRef)); markersData=[]; }
 
-    // --- Export PDF (Include V15 Street Lights) ---
     async function exportPDF() {
         if (!pdfDocBytes || !pdfOverlay) return alert("請先上傳 PDF");
         try {
@@ -657,47 +852,51 @@
                 return new Promise(resolve => { c.toBlob(blob => { blob.arrayBuffer().then(resolve); }, 'image/png'); });
             }
 
-            // 1. Street Lights (V15)
             for (const sl of streetLightsData) {
                 const lat = sl.layers.circle.getLatLng().lat;
                 const lng = sl.layers.circle.getLatLng().lng;
                 const pt = toPdfPoint(lat, lng);
                 
-                // Draw Red Circle
-                // Radius approximation
-                const edgePt = toPdfPoint(lat + 1/111111, lng);
+                const r = sl.data.radius || 7;
+                const edgePt = toPdfPoint(lat + r/111111, lng); 
                 const pdfR = Math.abs(edgePt.y - pt.y);
                 page.drawCircle({ x: pt.x, y: pt.y, size: pdfR, borderColor: rgb(1,0,0), borderWidth: 2 });
 
-                // Draw Text (Movable position)
                 const textLat = sl.layers.textLabel.getLatLng().lat;
                 const textLng = sl.layers.textLabel.getLatLng().lng;
                 const txtPt = toPdfPoint(textLat, textLng);
                 
-                const labelText = sl.data.name + (sl.data.new_cap ? (" " + sl.data.new_cap) : "");
+                const labelText = sl.data.name + (sl.data.new_cap ? `(${sl.data.new_cap})` : "");
+                
                 if(labelText.trim()) {
                     const pngBytes = await textToImageBytes(labelText, 14, '#ff0000');
                     const pngImage = await pdfDoc.embedPng(pngBytes);
                     const dims = pngImage.scale(0.25);
-                    page.drawImage(pngImage, { x: txtPt.x, y: txtPt.y - (dims.height/2), width: dims.width, height: dims.height });
+                    // V20/V21: Consistent PDF Offset
+                    page.drawImage(pngImage, { 
+                        x: txtPt.x + 18, 
+                        y: txtPt.y - (dims.height/2), 
+                        width: dims.width, 
+                        height: dims.height 
+                    });
                 }
             }
 
-            // 2. Manual Markers
-            for (const p of markersData) {
-                if (p.lat > north || p.lat < south || p.lng > east || p.lng < west) continue;
-                const pt = toPdfPoint(p.lat, p.lng);
-                page.drawSquare({ x: pt.x - 3, y: pt.y - 3, size: 6, color: rgb(1, 0, 0) });
-                const text = (p.name||'') + " " + (p.category||'');
-                if(text.trim()) {
-                    const pngBytes = await textToImageBytes(text, 12, '#ff0000');
-                    const pngImage = await pdfDoc.embedPng(pngBytes);
-                    const dims = pngImage.scale(0.25); 
-                    page.drawImage(pngImage, { x: pt.x + 5, y: pt.y - (dims.height/2), width: dims.width, height: dims.height });
+            if(typeof markersData !== 'undefined') {
+                for (const p of markersData) {
+                    if (p.lat > north || p.lat < south || p.lng > east || p.lng < west) continue;
+                    const pt = toPdfPoint(p.lat, p.lng);
+                    page.drawSquare({ x: pt.x - 3, y: pt.y - 3, size: 6, color: rgb(1, 0, 0) });
+                    const text = (p.name||'') + " " + (p.category||'');
+                    if(text.trim()) {
+                        const pngBytes = await textToImageBytes(text, 12, '#ff0000');
+                        const pngImage = await pdfDoc.embedPng(pngBytes);
+                        const dims = pngImage.scale(0.25); 
+                        page.drawImage(pngImage, { x: pt.x + 5, y: pt.y - (dims.height/2), width: dims.width, height: dims.height });
+                    }
                 }
             }
 
-            // 3. Drawings
             drawnItemsLayer.eachLayer(layer => {
                 if (layer.drawType === 'circle') {
                     let circleLayer; layer.eachLayer(l => { if(l instanceof L.Circle) circleLayer = l; });
@@ -727,7 +926,7 @@
                 }
             });
             
-            await new Promise(r => setTimeout(r, 800)); // wait for images
+            await new Promise(r => setTimeout(r, 800)); 
 
             const outBytes = await pdfDoc.save();
             const blob = new Blob([outBytes], { type: 'application/pdf' });
@@ -739,7 +938,6 @@
         } catch (err) { console.error(err); alert("匯出錯誤：" + err.message); }
     }
 
-    // --- Save/Load Project (V15: Include Street Lights) ---
     function saveProject() {
         if(!pdfOverlay) return;
         const b = pdfOverlay.getBounds();
@@ -756,11 +954,9 @@
             }
         });
         
-        // V15: Save Street Light Data
         const sls = streetLightsData.map(sl => {
             return {
-                data: sl.data,
-                // save positions (might be moved)
+                data: sl.data, 
                 lat: sl.layers.marker.getLatLng().lat,
                 lng: sl.layers.marker.getLatLng().lng,
                 textLat: sl.layers.textLabel.getLatLng().lat,
@@ -790,6 +986,11 @@
         reader.onload = evt => {
             try {
                 const d = JSON.parse(evt.target.result);
+                clearStreetLights(true); 
+                clearMarkers();
+                clearDrawings(true); 
+                drawnItemsLayer.clearLayers(); 
+
                 if(d.bounds && pdfOverlay) {
                     const b = [[d.bounds.north, d.bounds.west], [d.bounds.south, d.bounds.east]];
                     pdfOverlay.setBounds(b);
@@ -797,12 +998,9 @@
                     if(!isLocked) { clearControlHandles(); createControlHandles(pdfOverlay.getBounds()); }
                 }
                 if(d.markers) {
-                    clearMarkers();
                     d.markers.forEach(p => addMarkerToMap(p.lat, p.lng, p.name, p.category));
                 }
                 if(d.drawings) {
-                    clearDrawings(); 
-                    drawnItemsLayer.clearLayers(); 
                     d.drawings.forEach(item => {
                         const color = item.color || '#ff0000';
                         if(item.type === 'circle') createEditableCircle([item.lat, item.lng], item.radius, color);
@@ -810,22 +1008,19 @@
                         else if(item.type === 'text') createEditableText([item.lat, item.lng], item.content, item.fontSize, color);
                     });
                 }
-                // V15: Restore Street Lights
                 if(d.streetLights) {
-                    clearStreetLights();
-                    // Bypass confirmation for load
-                    streetLightsLayer.clearLayers(); streetLightsData = [];
                     d.streetLights.forEach(item => {
-                        createStreetLight(item.data); // Create base
-                        // Apply moved positions
+                        createStreetLight(item.data); 
                         const sl = streetLightsData[streetLightsData.length-1];
                         const newPt = L.latLng(item.lat, item.lng);
                         sl.layers.marker.setLatLng(newPt);
                         sl.layers.circle.setLatLng(newPt);
                         sl.layers.textLabel.setLatLng([item.textLat, item.textLng]);
-                        // Update text content in case it was saved with edits
                         const newHtml = generateLabelHtml(item.data.name, item.data.new_cap);
-                        sl.layers.textLabel.setIcon(L.divIcon({ className: 'text-label', html: newHtml, iconSize: [150, 20], iconAnchor: [0, 10] }));
+                        sl.layers.textLabel.setIcon(L.divIcon({ 
+                            className: 'text-label', html: newHtml, iconSize: [150, 20], 
+                            iconAnchor: [-45, 10] // V20 Restore anchor
+                        }));
                     });
                     document.getElementById('sl-status').innerText = `✅ 已還原 ${d.streetLights.length} 筆路燈`;
                 }
@@ -833,6 +1028,9 @@
         };
         reader.readAsText(file);
     });
+    
+    function clearDrawings(silent=false) { if(silent || confirm("確定清除?")) drawnItemsLayer.clearLayers(); }
+
 </script>
 </body>
 </html>
