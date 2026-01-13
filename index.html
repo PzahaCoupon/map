@@ -3,17 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF 地圖配準工具 (白邊修正版)</title>
+    <title>PDF 地圖配準工具 (V9: 穩定匯出版)</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <style>
-        body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: "Microsoft JhengHei", sans-serif; }
-        .sidebar { width: 340px; background: #f8f9fa; padding: 15px; display: flex; flex-direction: column; overflow-y: auto; z-index: 1000; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
+        body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: "Microsoft JhengHei", sans-serif; overflow: hidden; }
+        
+        .sidebar { 
+            width: 340px; background: #f8f9fa; padding: 15px; 
+            display: flex; flex-direction: column; overflow-y: auto; z-index: 1000; 
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1); 
+            transition: transform 0.3s ease; position: relative;
+        }
+        .sidebar.collapsed { transform: translateX(-340px); margin-right: -340px; }
+        
+        .toggle-btn {
+            position: absolute; top: 10px; right: -40px;
+            width: 40px; height: 40px; background: #007bff; color: white;
+            border: none; border-radius: 0 5px 5px 0; cursor: pointer;
+            font-size: 20px; display: flex; align-items: center; justify-content: center;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2); z-index: 2000;
+        }
+
         .section { margin-bottom: 20px; border: 1px solid #ddd; padding: 10px; background: white; border-radius: 5px; }
         label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; }
         button { width: 100%; padding: 8px; margin-top: 5px; cursor: pointer; border: none; border-radius: 3px; color: white; background: #6c757d; }
@@ -21,45 +38,91 @@
         button.primary { background: #007bff; }
         button.success { background: #28a745; }
         button.warning { background: #ffc107; color: #333; }
-        #map { flex: 1; height: 100%; }
+        button.info { background: #17a2b8; }
+        button.active { background: #0056b3; border: 2px solid #000; }
         
-        /* 控制點樣式 */
-        .handle-icon { background-color: rgba(255, 255, 255, 0.8); border: 2px solid #333; border-radius: 50%; cursor: move; box-shadow: 0 0 4px rgba(0,0,0,0.5); }
+        #map { flex: 1; height: 100%; z-index: 0; cursor: crosshair; }
+        
+        .handle-icon { background: rgba(255, 255, 255, 0.9); border: 2px solid #333; border-radius: 50%; cursor: nwse-resize; }
+        .move-handle-icon { background: rgba(0, 123, 255, 0.9); border: 2px solid white; border-radius: 4px; color: white; text-align: center; font-size: 16px; line-height: 18px; cursor: move; }
+
         .status-msg { font-size: 12px; color: #d63384; margin-top: 5px; font-weight: bold; line-height: 1.4; }
-        
-        /* 鎖定控制項 */
         .lock-control { display: flex; align-items: center; margin-top: 10px; background: #e9ecef; padding: 5px; border-radius: 4px; }
         .lock-control input { margin-right: 8px; transform: scale(1.2); }
+        .scale-inputs { display: flex; gap: 10px; margin-top: 5px; }
+        .scale-inputs div { flex: 1; }
+        .scale-inputs input { width: 100%; padding: 4px; font-size: 12px; }
+        
+        .draw-tools { display: flex; gap: 5px; flex-wrap: wrap; }
+        .draw-tools button { flex: 1; min-width: 60px; font-size: 12px; }
+        
+        #debug-info { font-family: monospace; font-size: 11px; background: #333; color: #0f0; padding: 8px; margin-top: 10px; border-radius: 4px; display: none; word-break: break-all; }
     </style>
 </head>
 <body>
 
-<div class="sidebar">
-    <h3>⚡ 台電圖號配準工具 V2</h3>
+<div class="sidebar" id="sidebar">
+    <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+    <h3>⚡ 台電圖號配準工具 V9</h3>
 
     <div class="section">
-        <label>1. 上傳 PDF (如: G5050.pdf)</label>
+        <label>1. 上傳 PDF</label>
         <input type="file" id="pdf-input" accept="application/pdf">
         <div id="auto-detect-msg" class="status-msg"></div>
         
+        <label style="margin-top:10px">白邊擴充係數:</label>
+        <div class="scale-inputs">
+            <div><label style="font-size:11px; margin:0;">↔️ 寬度倍率</label><input type="number" id="scale-x" value="1.24" step="0.01" onchange="recalcBounds()"></div>
+            <div><label style="font-size:11px; margin:0;">↕️ 高度倍率</label><input type="number" id="scale-y" value="1.42" step="0.01" onchange="recalcBounds()"></div>
+        </div>
+
         <label style="margin-top:10px">透明度:</label>
         <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.6" style="width:100%">
 
         <div class="lock-control">
             <input type="checkbox" id="aspect-ratio-check" checked>
-            <label for="aspect-ratio-check" style="margin:0; cursor:pointer;">🔒 鎖定長寬比 (拖拉時保持比例)</label>
+            <label for="aspect-ratio-check" style="margin:0; cursor:pointer;">🔒 鎖定長寬比</label>
         </div>
-
         <button id="btn-lock" class="warning" onclick="toggleLock()" disabled>🔓 鎖定 / 解鎖 PDF</button>
-        <div style="font-size:12px; color:#666; margin-top:5px;">* 若有白邊，請勾選「鎖定長寬比」並向外拖拉四角，直到內部街道對齊。</div>
+        <button class="info" onclick="showBoundsInfo()">📋 顯示邊界數據</button>
+        <div id="debug-info"></div>
+    </div>
+    
+    <div class="section" style="border-left: 4px solid #6610f2;">
+        <label>2. 繪圖註記 (Draw)</label>
+        <div class="draw-tools">
+            <button onclick="setDrawMode('circle')" id="btn-draw-circle">⭕ 畫圓</button>
+            <button onclick="setDrawMode('line')" id="btn-draw-line">➖ 畫線</button>
+            <button onclick="setDrawMode('text')" id="btn-draw-text">Aa 文字</button>
+            <button onclick="setDrawMode(null)" id="btn-draw-cancel" style="background:#ddd; color:#333;">✋ 停止</button>
+        </div>
+        <div style="font-size:11px; color:#666; margin-top:5px;">
+            * 畫圓: 拖拉半徑<br>
+            * 畫線: 拖拉起終點<br>
+            * 文字: 點擊地圖輸入
+        </div>
+        <button onclick="clearDrawings()" style="background:#dc3545; margin-top:5px;">🗑️ 清除所有繪圖</button>
+    </div>
+
+    <div class="section" style="border-left: 4px solid #28a745;">
+        <label>3. 參考 G-Code (CSV)</label>
+        <input type="file" id="ref-csv-input" accept=".csv">
+        <div style="margin-top:5px;">
+            <select id="csv-encoding" style="font-size:12px;">
+                <option value="UTF-8">UTF-8</option>
+                <option value="Big5">Big5</option>
+            </select>
+            <button onclick="clearRefMarkers()" style="width:auto; float:right; padding:2px 8px; font-size:12px; background:#6c757d;">清除</button>
+        </div>
+        <div id="ref-status" style="font-size:12px; color:#28a745; margin-top:5px;"></div>
     </div>
 
     <div class="section">
-        <label>2. 座標資料</label>
-        <textarea id="json-input" placeholder='[{"lat": 25.033, "lng": 121.565, "name": "點1", "category": "一般"}]' style="width:100%; height:80px"></textarea>
-        <button class="primary" onclick="importData()">匯入資料</button>
-        <button onclick="addManualMarker()">➕ 新增點 (畫面中心)</button>
-        <button onclick="clearMarkers()" style="background:#dc3545">清除所有點</button>
+        <label>4. 標註資料 (紅點)</label>
+        <textarea id="json-input" placeholder='[{"lat": 25.033, "lng": 121.565, "name": "點1", "category": "一般"}]' style="width:100%; height:60px"></textarea>
+        <button class="primary" onclick="importData()">匯入標註 JSON</button>
+        <button onclick="addManualMarker()">➕ 新增標註點</button>
+        <button onclick="clearMarkers()" style="background:#dc3545">清除所有標註</button>
     </div>
 
     <div class="section">
@@ -73,7 +136,7 @@
 <div id="map"></div>
 
 <script>
-    // --- 座標系統設定 (TWD67 TM2 -> WGS84) ---
+    // --- 初始設定 ---
     proj4.defs("EPSG:3828", "+proj=tmerc +lat_0=0 +lon_0=121 +x_0=250000 +y_0=0 +k=0.9999 +ellps=aust_SA +towgs84=-752,-358,-179,-.0000011698,.0000018398,.0000009822,.00002329 +units=m +no_defs");
     proj4.defs("EPSG:4326", "+proj=longlat +datum=WGS84 +no_defs");
 
@@ -88,66 +151,62 @@
         'X': [275000, 2614000], 'Y': [275000, 2564000]
     };
 
-    // --- 全域變數 ---
-    let map = L.map('map').setView([24.1477, 120.6736], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM' }).addTo(map);
+    const EXACT_BOUNDS = { "G5050": [[24.183209, 120.613454], [24.176813, 120.623288]] };
+
+    let map = L.map('map', { maxZoom: 25 }).setView([24.1800, 120.6200], 16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM', maxZoom: 25, maxNativeZoom: 19 }).addTo(map);
     
     let pdfOverlay = null;
     let pdfDocBytes = null;
-    let boundsHandleNW, boundsHandleSE;
+    let boundsHandleNW, boundsHandleSE, boundsHandleCenter;
     let isLocked = false;
     let markersData = [];
-    let initialAspectRatio = 1.0; // 寬/高 比
+    let refMarkersLayer = L.layerGroup().addTo(map);
+    let drawnItemsLayer = L.layerGroup().addTo(map);
+    let currentBaseBounds = null;
+    let currentDrawMode = null;
+    let tempDrawShape = null;
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    // --- 功能：解析圖號並計算邊界 ---
-    function getBoundsFromMapID(filename) {
-        const match = filename.toUpperCase().match(/([A-Z])(\d{2})(\d{2})/);
-        if (!match) return null;
-
-        const code = match[1];
-        const xIdx = parseInt(match[2]);
-        const yIdx = parseInt(match[3]);
-        const base = taiGridMap[code];
-        if (!base) return null;
-
-        const startX = base[0] + (xIdx * 800);
-        const startY = base[1] + (yIdx * 500);
-        const endX = startX + 800;
-        const endY = startY + 500;
-
-        const p1 = proj4("EPSG:3828", "EPSG:4326", [startX, startY]); // SW
-        const p2 = proj4("EPSG:3828", "EPSG:4326", [endX, endY]);     // NE
-
-        // 回傳 [NW, SE]
-        return [[p2[1], p1[0]], [p1[1], p2[0]]]; 
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('collapsed');
+        setTimeout(() => { map.invalidateSize(); }, 300);
     }
 
-    // --- 1. PDF 上傳與處理 ---
+    // --- PDF 上傳與複製 ---
     document.getElementById('pdf-input').addEventListener('change', async function(e) {
         const file = e.target.files[0];
         if (!file) return;
 
-        const autoBounds = getBoundsFromMapID(file.name);
+        // 深層複製 Buffer，避免被 Worker 轉移
+        const rawBuffer = await file.arrayBuffer();
+        pdfDocBytes = rawBuffer.slice(0);
+        const displayBuffer = rawBuffer.slice(0);
+        
+        const gridInfo = getGridBounds(file.name);
         const msgDiv = document.getElementById('auto-detect-msg');
-        if (autoBounds) {
-            msgDiv.innerHTML = `✅ 偵測到圖號 ${file.name.substring(0,5)}<br>已定位到概略位置，請因應白邊手動微調。`;
+        let initialBounds;
+
+        if (gridInfo) {
+            if(gridInfo.type === 'exact') {
+                msgDiv.innerHTML = `✅ ${file.name.substring(0,5)} (精準)`;
+                initialBounds = gridInfo.bounds;
+                currentBaseBounds = null;
+            } else {
+                msgDiv.innerHTML = `✅ ${file.name.substring(0,5)} (自動白邊)`;
+                currentBaseBounds = gridInfo.bounds;
+                initialBounds = applyScale(gridInfo.bounds);
+            }
         } else {
-            msgDiv.innerText = `⚠️ 未偵測到圖號，請手動校正。`;
+            msgDiv.innerText = `⚠️ 未偵測到圖號`;
+            currentBaseBounds = null;
         }
 
-        const arrayBuffer = await file.arrayBuffer();
-        pdfDocBytes = arrayBuffer;
-
-        const loadingTask = pdfjsLib.getDocument(arrayBuffer);
+        const loadingTask = pdfjsLib.getDocument(displayBuffer);
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 2 }); // 提升解析度
-        
-        // 計算 PDF 原始長寬比 (Pixel)
-        initialAspectRatio = viewport.width / viewport.height;
-
+        const viewport = page.getViewport({ scale: 4 }); // 4K 渲染
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.height = viewport.height;
@@ -155,234 +214,289 @@
         await page.render({ canvasContext: context, viewport: viewport }).promise;
         const imgUrl = canvas.toDataURL('image/png');
 
-        let bounds;
-        if (autoBounds) {
-            bounds = autoBounds;
-        } else {
+        if (!initialBounds) {
             const c = map.getCenter();
-            // 預設給一個符合比例的方框
-            const h = 0.005;
-            const w = h * initialAspectRatio;
-            bounds = [[c.lat + h/2, c.lng - w/2], [c.lat - h/2, c.lng + w/2]];
+            const latRad = c.lat * Math.PI / 180;
+            const hDeg = 0.005; 
+            const wDeg = hDeg * (viewport.width / viewport.height) / Math.cos(latRad); 
+            initialBounds = [[c.lat + hDeg/2, c.lng - wDeg/2], [c.lat - hDeg/2, c.lng + wDeg/2]];
         }
 
         if (pdfOverlay) map.removeLayer(pdfOverlay);
-        if (boundsHandleNW) map.removeLayer(boundsHandleNW);
-        if (boundsHandleSE) map.removeLayer(boundsHandleSE);
-
-        pdfOverlay = L.imageOverlay(imgUrl, bounds, { opacity: 0.6 }).addTo(map);
-        createControlHandles(bounds);
-        
+        clearControlHandles();
+        pdfOverlay = L.imageOverlay(imgUrl, initialBounds, { opacity: 0.6 }).addTo(map);
+        createControlHandles(initialBounds);
         document.getElementById('btn-lock').disabled = false;
-        map.fitBounds(bounds);
+        map.fitBounds(initialBounds);
     });
 
-    // 建立拖拉控制點 (包含鎖定長寬比邏輯)
+    function getGridBounds(filename) {
+        const simpleName = filename.split('/').pop().split('.')[0].toUpperCase();
+        if (EXACT_BOUNDS[simpleName]) return { type: 'exact', bounds: EXACT_BOUNDS[simpleName] };
+        const match = simpleName.match(/([A-Z])(\d{2})(\d{2})/);
+        if (!match) return null;
+        const code = match[1], xIdx = parseInt(match[2]), yIdx = parseInt(match[3]);
+        const base = taiGridMap[code];
+        if (!base) return null;
+        const startX = base[0] + (xIdx * 800), startY = base[1] + (yIdx * 500);
+        const endX = startX + 800, endY = startY + 500;
+        const p1 = proj4("EPSG:3828", "EPSG:4326", [startX, startY]);
+        const p2 = proj4("EPSG:3828", "EPSG:4326", [endX, endY]);
+        return { type: 'grid', bounds: [[p2[1], p1[0]], [p1[1], p2[0]]] };
+    }
+
+    function applyScale(gridBounds) {
+        const scaleX = parseFloat(document.getElementById('scale-x').value) || 1.0;
+        const scaleY = parseFloat(document.getElementById('scale-y').value) || 1.0;
+        const N = gridBounds[0][0], W = gridBounds[0][1];
+        const S = gridBounds[1][0], E = gridBounds[1][1];
+        const cLat = (N + S) / 2, cLng = (W + E) / 2;
+        const h = N - S, w = E - W;
+        return [[cLat + (h*scaleY)/2, cLng - (w*scaleX)/2], [cLat - (h*scaleY)/2, cLng + (w*scaleX)/2]];
+    }
+
+    window.recalcBounds = function() {
+        if (!currentBaseBounds || !pdfOverlay) return;
+        const newBounds = applyScale(currentBaseBounds);
+        pdfOverlay.setBounds(newBounds);
+        clearControlHandles();
+        createControlHandles(newBounds);
+    };
+
+    function clearControlHandles() {
+        if (boundsHandleNW) map.removeLayer(boundsHandleNW);
+        if (boundsHandleSE) map.removeLayer(boundsHandleSE);
+        if (boundsHandleCenter) map.removeLayer(boundsHandleCenter);
+    }
     function createControlHandles(bounds) {
-        const icon = L.divIcon({ className: 'handle-icon', iconSize: [14, 14] });
+        const icon = L.divIcon({ className: 'handle-icon', iconSize: [12, 12] });
+        const centerIcon = L.divIcon({ className: 'move-handle-icon', html: '+', iconSize: [20, 20], iconAnchor: [10, 10] });
         
         boundsHandleNW = L.marker(bounds[0], { draggable: true, icon: icon }).addTo(map);
         boundsHandleSE = L.marker(bounds[1], { draggable: true, icon: icon }).addTo(map);
+        const center = L.latLngBounds(bounds).getCenter();
+        boundsHandleCenter = L.marker(center, { draggable: true, icon: centerIcon, zIndexOffset: 1000 }).addTo(map);
 
-        // 共用的拖拉處理函式
-        const handleDrag = (e) => {
+        const handleResize = (e) => {
             const isRatioLocked = document.getElementById('aspect-ratio-check').checked;
-            const targetMarker = e.target;
-            const isNW = (targetMarker === boundsHandleNW);
-            
-            // 取得當前兩個點的位置
-            let nw = boundsHandleNW.getLatLng();
-            let se = boundsHandleSE.getLatLng();
-            
+            const target = e.target;
+            const isNW = (target === boundsHandleNW);
+            let anchor = isNW ? boundsHandleSE.getLatLng() : boundsHandleNW.getLatLng();
+            let current = target.getLatLng();
             if (isRatioLocked) {
-                // 如果鎖定長寬比，我們依據「另一個固定點」來計算當前點應該在哪
-                // 這裡使用簡單的緯度優先算法：依據 Lat 的變化量，推算 Lng 應該變多少
-                const anchor = isNW ? se : nw; // 固定點
-                const current = targetMarker.getLatLng();
-                
-                // 計算高度差 (Lat)
-                const deltaLat = Math.abs(current.lat - anchor.lat);
-                // 依據比例計算應有的寬度差 (Lng)
-                // 注意：這是在經緯度空間的近似計算，對於小範圍地圖是足夠的
-                // 修正係數：因為經度在不同緯度長度不同，簡單起見我們先用原始比例
-                // 若要更精確，應計算 aspect ratio in meters，但在 Web Mercator 下
-                // 保持視覺比例通常只要鎖定 Lat/Lng 的 delta ratio 即可
-                
-                // 取得原始邊界的 Lat/Lng 比例 (用剛開始的 bounds 計算可能較準，但這裡用當下的)
-                // 為了讓操作直覺，我們使用「目前的游標位置」來決定大小
-                
-                const newLat = current.lat;
-                // 推算 Lng: ratio = w / h -> w = h * ratio
-                // 需注意方向性：NW 在 SE 的左上 (+Lat, -Lng)
-                const latDiff = newLat - anchor.lat;
-                
-                // 這裡簡化：假設 PDF 是正的，沒有旋轉
-                // AspectRatio = Width / Height. 
-                // In LatLng: DeltaLng / DeltaLat (approx). 
-                // 讓我們直接用目前的 bounds 比例 或 原始比例?
-                // 用原始 PDF pixel ratio 最準確，但需換算成 LatLng ratio (受緯度影響)
-                // 簡單解法：維持當下的 width/height 比例
-                
-                const currentBounds = pdfOverlay.getBounds();
-                const currentRatio = (currentBounds.getEast() - currentBounds.getWest()) / 
-                                     (currentBounds.getNorth() - currentBounds.getSouth());
-                
-                // 計算新的 Lng
-                const newLng = anchor.lng + (latDiff * currentRatio); // 保持斜率
-                
-                // 強制將 Marker 移回鎖定位置
-                const lockedPos = L.latLng(newLat, newLng);
-                targetMarker.setLatLng(lockedPos);
-                
-                // 更新變數以便設定 overlay
-                if (isNW) nw = lockedPos;
-                else se = lockedPos;
+                const oldB = pdfOverlay.getBounds();
+                const oNW = oldB.getNorthWest(), oSE = oldB.getSouthEast();
+                const ratio = (isNW ? (oNW.lng - oSE.lng) : (oSE.lng - oNW.lng)) / (isNW ? (oNW.lat - oSE.lat) : (oSE.lat - oNW.lat));
+                current.lng = anchor.lng + (current.lat - anchor.lat) * ratio;
+                target.setLatLng(current);
             }
-
-            // 更新圖片位置
-            pdfOverlay.setBounds([nw, se]);
+            let newNW = isNW ? current : anchor, newSE = isNW ? anchor : current;
+            pdfOverlay.setBounds([newNW, newSE]);
+            boundsHandleCenter.setLatLng(L.latLngBounds([newNW, newSE]).getCenter());
         };
-
-        boundsHandleNW.on('drag', handleDrag);
-        boundsHandleSE.on('drag', handleDrag);
+        const handleMove = (e) => {
+            const newCenter = e.target.getLatLng();
+            const oldCenter = pdfOverlay.getBounds().getCenter();
+            const dLat = newCenter.lat - oldCenter.lat, dLng = newCenter.lng - oldCenter.lng;
+            const b = pdfOverlay.getBounds();
+            pdfOverlay.setBounds([[b.getNorth()+dLat, b.getWest()+dLng], [b.getSouth()+dLat, b.getEast()+dLng]]);
+            boundsHandleNW.setLatLng([b.getNorth()+dLat, b.getWest()+dLng]);
+            boundsHandleSE.setLatLng([b.getSouth()+dLat, b.getEast()+dLng]);
+        };
+        boundsHandleNW.on('drag', handleResize);
+        boundsHandleSE.on('drag', handleResize);
+        boundsHandleCenter.on('drag', handleMove);
     }
-
     function toggleLock() {
         if (!pdfOverlay) return;
         isLocked = !isLocked;
         const btn = document.getElementById('btn-lock');
-        
         if (isLocked) {
-            if (boundsHandleNW) map.removeLayer(boundsHandleNW);
-            if (boundsHandleSE) map.removeLayer(boundsHandleSE);
+            clearControlHandles();
             pdfOverlay.getElement().style.pointerEvents = 'none';
-            btn.innerText = '🔒 已鎖定 (點此解鎖)';
-            btn.className = 'success';
+            btn.innerText = '🔒 已鎖定'; btn.className = 'success';
         } else {
             const b = pdfOverlay.getBounds();
             createControlHandles([b.getNorthWest(), b.getSouthEast()]);
             pdfOverlay.getElement().style.pointerEvents = 'auto';
-            btn.innerText = '🔓 鎖定 / 解鎖 PDF';
-            btn.className = 'warning';
+            btn.innerText = '🔓 鎖定 / 解鎖'; btn.className = 'warning';
         }
     }
-    
-    document.getElementById('opacity-slider').addEventListener('input', e => {
-        if(pdfOverlay) pdfOverlay.setOpacity(e.target.value);
+    document.getElementById('opacity-slider').addEventListener('input', e => { if(pdfOverlay) pdfOverlay.setOpacity(e.target.value); });
+    function showBoundsInfo() { if(pdfOverlay) alert(pdfOverlay.getBounds().toBBoxString()); }
+
+    // --- 繪圖工具 ---
+    window.setDrawMode = function(mode) {
+        currentDrawMode = mode;
+        map.dragging.enable();
+        document.querySelectorAll('.draw-tools button').forEach(b => b.classList.remove('active'));
+        if(mode) {
+            document.getElementById('btn-draw-'+mode).classList.add('active');
+            map.dragging.disable(); 
+            map.getContainer().style.cursor = 'crosshair';
+        } else { map.getContainer().style.cursor = ''; }
+    };
+    window.clearDrawings = function() { if(confirm("確定清除?")) drawnItemsLayer.clearLayers(); };
+
+    let startPoint = null;
+    map.on('mousedown', function(e) {
+        if(!currentDrawMode) return;
+        startPoint = e.latlng;
+        if(currentDrawMode === 'circle') tempDrawShape = L.circle(startPoint, {radius: 1, color:'red', weight:2}).addTo(drawnItemsLayer);
+        else if(currentDrawMode === 'line') tempDrawShape = L.polyline([startPoint, startPoint], {color:'red', weight:3}).addTo(drawnItemsLayer);
+        else if(currentDrawMode === 'text') {
+            const text = prompt("輸入文字:", "註記");
+            if(text) {
+                const marker = L.marker(startPoint, {
+                    icon: L.divIcon({ className: 'text-label', html: `<div style="color:red;font-size:16px;font-weight:bold;text-shadow:1px 1px 0 #fff;">${text}</div>`, iconSize: [100, 20] }),
+                    interactive: true, draggable: true
+                }).addTo(drawnItemsLayer);
+                marker.drawType = 'text'; marker.textContent = text;
+            }
+            setDrawMode(null);
+        }
+    });
+    map.on('mousemove', function(e) {
+        if(!currentDrawMode || !startPoint || !tempDrawShape) return;
+        if(currentDrawMode === 'circle') tempDrawShape.setRadius(map.distance(startPoint, e.latlng));
+        else if(currentDrawMode === 'line') tempDrawShape.setLatLngs([startPoint, e.latlng]);
+    });
+    map.on('mouseup', function(e) {
+        if(!currentDrawMode || !startPoint) return;
+        if(tempDrawShape) tempDrawShape.drawType = currentDrawMode;
+        startPoint = null; tempDrawShape = null; setDrawMode(null);
     });
 
-    // --- 2. 資料點功能 ---
+    // --- CSV & Markers ---
+    document.getElementById('ref-csv-input').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const encoding = document.getElementById('csv-encoding').value;
+        Papa.parse(file, {
+            header: true, encoding: encoding, skipEmptyLines: true,
+            complete: function(results) {
+                let count = 0;
+                results.data.forEach(row => {
+                    const lat = parseFloat(row['G-y']), lng = parseFloat(row['G-x']);
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        L.circleMarker([lat, lng], { color: 'green', fillColor: '#90EE90', fillOpacity: 0.8, radius: 5 }).bindPopup(`<b>${row['G-code']}</b><br>${row['G-W']||''}`).addTo(refMarkersLayer);
+                        count++;
+                    }
+                });
+                document.getElementById('ref-status').innerText = `✅ 已載入 ${count} 個`;
+            }
+        });
+    });
+    function clearRefMarkers() { refMarkersLayer.clearLayers(); }
+    
     function addMarkerToMap(lat, lng, name, category, id=null) {
         const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
         const dataId = id || Date.now().toString();
-        
-        marker.bindPopup(`
-            <div>
-                名稱: <input value="${name}" onchange="updateM('${dataId}', 'name', this.value)"><br>
-                類別: <select onchange="updateM('${dataId}', 'category', this.value)">
-                    <option value="一般" ${category=='一般'?'selected':''}>一般</option>
-                    <option value="待修" ${category=='待修'?'selected':''}>待修</option>
-                </select><br>
-                <button onclick="delM('${dataId}')" style="margin-top:5px;background:red;color:white">刪除</button>
-            </div>
-        `);
-        
+        marker.bindPopup(`名稱: <input value="${name}" onchange="updateM('${dataId}','name',this.value)"><br>類別: <select onchange="updateM('${dataId}','category',this.value)"><option value="一般">一般</option><option value="待修">待修</option></select><br><button onclick="delM('${dataId}')">刪除</button>`);
         markersData.push({ id: dataId, lat, lng, name, category, markerRef: marker });
-        
-        marker.on('dragend', e => {
-            const d = markersData.find(x => x.id === dataId);
-            if(d) { d.lat = e.target.getLatLng().lat; d.lng = e.target.getLatLng().lng; }
-        });
+        marker.on('dragend', e => { const d = markersData.find(x=>x.id===dataId); if(d) { d.lat=e.target.getLatLng().lat; d.lng=e.target.getLatLng().lng; }});
     }
+    window.updateM=(id,f,v)=>{const d=markersData.find(x=>x.id===id);if(d)d[f]=v;};
+    window.delM=(id)=>{const idx=markersData.findIndex(x=>x.id===id);if(idx>=0){map.removeLayer(markersData[idx].markerRef);markersData.splice(idx,1);}};
+    function addManualMarker(){ addMarkerToMap(map.getCenter().lat, map.getCenter().lng, '新點', '一般'); }
+    function clearMarkers(){ markersData.forEach(d=>map.removeLayer(d.markerRef)); markersData=[]; }
 
-    window.updateM = (id, f, v) => { const d = markersData.find(x => x.id===id); if(d) d[f]=v; };
-    window.delM = (id) => { 
-        const idx = markersData.findIndex(x => x.id===id);
-        if(idx>=0) { map.removeLayer(markersData[idx].markerRef); markersData.splice(idx,1); }
-    };
-
-    function importData() {
-        try {
-            const data = JSON.parse(document.getElementById('json-input').value);
-            data.forEach(p => addMarkerToMap(p.lat, p.lng, p.name || '未命名', p.category || '一般'));
-        } catch(e) { alert('JSON 格式錯誤'); }
-    }
-    
-    function addManualMarker() {
-        const c = map.getCenter();
-        addMarkerToMap(c.lat, c.lng, '新地點', '一般');
-    }
-    
-    function clearMarkers() {
-        markersData.forEach(d => map.removeLayer(d.markerRef));
-        markersData = [];
-    }
-
-    // --- 3. 匯出 PDF (含錯誤偵測) ---
+    // --- 匯出 PDF (修復 Annots Array 錯誤) ---
     async function exportPDF() {
-        if (!pdfDocBytes || !pdfOverlay) return alert("無 PDF 資料，請先上傳 PDF。");
-        
+        if (!pdfDocBytes || !pdfOverlay) return alert("請先上傳 PDF");
         try {
-            const { PDFDocument, rgb } = PDFLib;
+            const { PDFDocument, PDFHexString } = PDFLib;
             const pdfDoc = await PDFDocument.load(pdfDocBytes);
             const page = pdfDoc.getPages()[0];
             const { width: pdfW, height: pdfH } = page.getSize();
-            
             const b = pdfOverlay.getBounds();
-            const north = b.getNorth();
-            const south = b.getSouth();
-            const east = b.getEast();
-            const west = b.getWest();
+            const north = b.getNorth(), south = b.getSouth(), east = b.getEast(), west = b.getWest();
 
-            let count = 0;
+            function toPdfPoint(lat, lng) {
+                return { x: ((lng - west)/(east - west))*pdfW, y: ((lat - south)/(north - south))*pdfH };
+            }
+
+            // 1. Markers
             for (const p of markersData) {
-                // 檢查是否在範圍內
                 if (p.lat > north || p.lat < south || p.lng > east || p.lng < west) continue;
-                
-                // 經緯度 -> PDF 像素座標
-                // 原理：算出點在 Overlay 寬高中的比例 (0~1)，再乘上 PDF 頁面寬高
-                // 只要 Overlay 有對齊地圖，這個計算就是準的 (包含白邊區域)
-                const rX = (p.lng - west) / (east - west);
-                const rY = (p.lat - south) / (north - south);
-                const pdfX = rX * pdfW;
-                const pdfY = rY * pdfH;
-                
+                const pt = toPdfPoint(p.lat, p.lng);
+                const text = (p.name||'') + " (" + (p.category||'') + ")";
                 const annot = pdfDoc.context.obj({
                     Type: 'Annot', Subtype: 'Square',
-                    Rect: [pdfX-5, pdfY-5, pdfX+5, pdfY+5],
-                    C: [1, 0, 0], IC: [1, 0, 0],
-                    Contents: PDFLib.PDFString.of(p.name + " (" + p.category + ")"),
-                    T: PDFLib.PDFString.of(p.category)
+                    Rect: [pt.x-5, pt.y-5, pt.x+5, pt.y+5], C: [1, 0, 0], IC: [1, 0, 0],
+                    Contents: createPdfHexString(text), T: createPdfHexString(p.category||'Note')
                 });
-                
-                let annots = page.node.Annots();
-                if (!annots) {
-                    page.node.set(PDFLib.PDFName.of('Annots'), pdfDoc.context.register([annot]));
-                } else {
-                    annots.push(annot);
+                addAnnot(page, annot, pdfDoc);
+            }
+
+            // 2. Drawings
+            drawnItemsLayer.eachLayer(layer => {
+                if (layer.drawType === 'circle') {
+                    const center = layer.getLatLng();
+                    const pt = toPdfPoint(center.lat, center.lng);
+                    const pdfR = Math.abs(toPdfPoint(center.lat + layer.getRadius()/111111, center.lng).y - pt.y);
+                    const annot = pdfDoc.context.obj({
+                        Type: 'Annot', Subtype: 'Circle',
+                        Rect: [pt.x-pdfR, pt.y-pdfR, pt.x+pdfR, pt.y+pdfR], C: [1, 0, 0], Border: [0, 0, 2],
+                        Contents: createPdfHexString("Circle")
+                    });
+                    addAnnot(page, annot, pdfDoc);
+                } else if (layer.drawType === 'line') {
+                    const lls = layer.getLatLngs();
+                    if(lls.length>=2) {
+                        const p1 = toPdfPoint(lls[0].lat, lls[0].lng), p2 = toPdfPoint(lls[1].lat, lls[1].lng);
+                        const annot = pdfDoc.context.obj({
+                            Type: 'Annot', Subtype: 'Line',
+                            Rect: [Math.min(p1.x,p2.x), Math.min(p1.y,p2.y), Math.max(p1.x,p2.x), Math.max(p1.y,p2.y)],
+                            L: [p1.x, p1.y, p2.x, p2.y], C: [1, 0, 0], Border: [0, 0, 2]
+                        });
+                        addAnnot(page, annot, pdfDoc);
+                    }
+                } else if (layer.drawType === 'text') {
+                    const pt = toPdfPoint(layer.getLatLng().lat, layer.getLatLng().lng);
+                    const annot = pdfDoc.context.obj({
+                        Type: 'Annot', Subtype: 'FreeText',
+                        Rect: [pt.x, pt.y, pt.x+100, pt.y+20],
+                        Contents: createPdfHexString(layer.textContent||""),
+                        DA: PDFLib.PDFString.of("/Helv 12 Tf 1 0 0 rg")
+                    });
+                    addAnnot(page, annot, pdfDoc);
                 }
-                count++;
-            }
-            
-            if(count === 0 && markersData.length > 0) {
-                alert("注意：雖然有資料點，但似乎都不在目前的 PDF 範圍內？請檢查 PDF 是否覆蓋了這些點。");
-            }
+            });
 
             const outBytes = await pdfDoc.save();
             const blob = new Blob([outBytes], { type: 'application/pdf' });
-            
-            // 下載觸發邏輯
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = 'annotated_map.pdf';
-            document.body.appendChild(link); // Firefox 需要 append 才能 click
-            link.click();
-            document.body.removeChild(link);
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        } catch (err) { console.error(err); alert("匯出錯誤：" + err.message); }
+    }
 
-        } catch (err) {
-            console.error(err);
-            alert("匯出 PDF 時發生錯誤：\n" + err.message);
+    // 關鍵修正：將註釋正確加入 Annots 陣列
+    function addAnnot(page, annot, pdfDoc) {
+        const annotRef = pdfDoc.context.register(annot); // 1. 註冊為 Reference
+        let annots = page.node.Annots();
+        if (!annots) {
+            // 2. 若陣列不存在，建立一個新的 PDFArray 包含該 Reference
+            const annotsArray = pdfDoc.context.obj([annotRef]);
+            const annotsRef = pdfDoc.context.register(annotsArray);
+            page.node.set(PDFLib.PDFName.of('Annots'), annotsRef);
+        } else {
+            // 3. 若已存在，推入 Reference
+            annots.push(annotRef);
         }
+    }
+
+    function createPdfHexString(text) {
+        if (!text) return PDFLib.PDFHexString.of('FEFF'); 
+        let hex = 'FEFF';
+        for (let i = 0; i < text.length; i++) {
+            let code = text.charCodeAt(i).toString(16).toUpperCase();
+            while (code.length < 4) code = '0' + code;
+            hex += code;
+        }
+        return PDFLib.PDFHexString.of(hex);
     }
 
     // --- 專案存檔 ---
@@ -397,11 +511,8 @@
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = 'project.json';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
     }
-
     function loadProjectClick() { document.getElementById('project-input').click(); }
     document.getElementById('project-input').addEventListener('change', e => {
         const file = e.target.files[0];
@@ -414,18 +525,13 @@
                     const b = [[d.bounds.north, d.bounds.west], [d.bounds.south, d.bounds.east]];
                     pdfOverlay.setBounds(b);
                     map.fitBounds(b);
-                    // 重新建立控制點以符合新位置
-                    if(!isLocked) {
-                       map.removeLayer(boundsHandleNW);
-                       map.removeLayer(boundsHandleSE);
-                       createControlHandles(pdfOverlay.getBounds());
-                    }
+                    if(!isLocked) { clearControlHandles(); createControlHandles(pdfOverlay.getBounds()); }
                 }
                 if(d.markers) {
                     clearMarkers();
                     d.markers.forEach(p => addMarkerToMap(p.lat, p.lng, p.name, p.category));
                 }
-            } catch(err) { alert("讀取專案檔失敗"); }
+            } catch(err) { alert("讀取失敗"); }
         };
         reader.readAsText(file);
     });
