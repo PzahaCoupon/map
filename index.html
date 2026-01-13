@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF 地圖配準工具 (V9: 穩定匯出版)</title>
+    <title>PDF 地圖配準工具 (V15: 路燈登記單整合版)</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -16,12 +16,12 @@
         body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: "Microsoft JhengHei", sans-serif; overflow: hidden; }
         
         .sidebar { 
-            width: 340px; background: #f8f9fa; padding: 15px; 
+            width: 360px; background: #f8f9fa; padding: 15px; 
             display: flex; flex-direction: column; overflow-y: auto; z-index: 1000; 
             box-shadow: 2px 0 5px rgba(0,0,0,0.1); 
             transition: transform 0.3s ease; position: relative;
         }
-        .sidebar.collapsed { transform: translateX(-340px); margin-right: -340px; }
+        .sidebar.collapsed { transform: translateX(-360px); margin-right: -360px; }
         
         .toggle-btn {
             position: absolute; top: 10px; right: -40px;
@@ -39,12 +39,14 @@
         button.success { background: #28a745; }
         button.warning { background: #ffc107; color: #333; }
         button.info { background: #17a2b8; }
+        button.danger { background: #dc3545; }
         button.active { background: #0056b3; border: 2px solid #000; }
         
         #map { flex: 1; height: 100%; z-index: 0; cursor: crosshair; }
         
         .handle-icon { background: rgba(255, 255, 255, 0.9); border: 2px solid #333; border-radius: 50%; cursor: nwse-resize; }
         .move-handle-icon { background: rgba(0, 123, 255, 0.9); border: 2px solid white; border-radius: 4px; color: white; text-align: center; font-size: 16px; line-height: 18px; cursor: move; }
+        .drag-point-icon { background: #007bff; border: 1px solid white; border-radius: 50%; box-shadow: 0 0 3px rgba(0,0,0,0.5); cursor: move; }
 
         .status-msg { font-size: 12px; color: #d63384; margin-top: 5px; font-weight: bold; line-height: 1.4; }
         .lock-control { display: flex; align-items: center; margin-top: 10px; background: #e9ecef; padding: 5px; border-radius: 4px; }
@@ -54,31 +56,35 @@
         .scale-inputs input { width: 100%; padding: 4px; font-size: 12px; }
         
         .draw-tools { display: flex; gap: 5px; flex-wrap: wrap; }
-        .draw-tools button { flex: 1; min-width: 60px; font-size: 12px; }
+        .draw-tools button { flex: 1; min-width: 50px; font-size: 12px; }
+        .tool-options { display: flex; align-items: center; gap: 10px; margin-top: 5px; font-size: 12px; background: #eee; padding: 5px; border-radius: 4px; flex-wrap: wrap; }
         
         #debug-info { font-family: monospace; font-size: 11px; background: #333; color: #0f0; padding: 8px; margin-top: 10px; border-radius: 4px; display: none; word-break: break-all; }
+        .delete-btn { background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px; }
+
+        /* 路燈編輯 Popup */
+        .sl-popup label { font-size: 12px; margin-bottom: 2px; color: #555; }
+        .sl-popup input, .sl-popup select { width: 100%; margin-bottom: 8px; padding: 4px; box-sizing: border-box; }
+        .sl-popup button { margin-top: 5px; padding: 4px; font-size: 12px; width: 48%; float: left; margin-right: 2%; }
     </style>
 </head>
 <body>
 
 <div class="sidebar" id="sidebar">
     <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
-    <h3>⚡ 台電圖號配準工具 V9</h3>
+    <h3>⚡ 台電圖號配準工具 V15</h3>
 
     <div class="section">
         <label>1. 上傳 PDF</label>
         <input type="file" id="pdf-input" accept="application/pdf">
         <div id="auto-detect-msg" class="status-msg"></div>
-        
         <label style="margin-top:10px">白邊擴充係數:</label>
         <div class="scale-inputs">
             <div><label style="font-size:11px; margin:0;">↔️ 寬度倍率</label><input type="number" id="scale-x" value="1.24" step="0.01" onchange="recalcBounds()"></div>
             <div><label style="font-size:11px; margin:0;">↕️ 高度倍率</label><input type="number" id="scale-y" value="1.42" step="0.01" onchange="recalcBounds()"></div>
         </div>
-
         <label style="margin-top:10px">透明度:</label>
         <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.6" style="width:100%">
-
         <div class="lock-control">
             <input type="checkbox" id="aspect-ratio-check" checked>
             <label for="aspect-ratio-check" style="margin:0; cursor:pointer;">🔒 鎖定長寬比</label>
@@ -88,45 +94,52 @@
         <div id="debug-info"></div>
     </div>
     
+    <div class="section" style="border-left: 4px solid #007bff;">
+        <label>2. 匯入路燈資料 (CSV)</label>
+        <div style="font-size:11px;color:#666;margin-bottom:5px;">欄位: name, x, y, G-code_1st</div>
+        <input type="file" id="sl-csv-input" accept=".csv">
+        <div style="margin-top:5px;">
+            <select id="sl-encoding" style="font-size:12px;"><option value="UTF-8">UTF-8</option><option value="Big5">Big5</option></select>
+            <button onclick="clearStreetLights()" style="width:auto; float:right; padding:2px 8px; font-size:12px; background:#dc3545;">清除</button>
+        </div>
+        <div id="sl-status" style="font-size:12px; color:#007bff; margin-top:5px;"></div>
+        <button class="primary" onclick="exportRegistrationSheet()" style="margin-top:10px;">📊 匯出登記單 (Excel CSV)</button>
+    </div>
+
     <div class="section" style="border-left: 4px solid #6610f2;">
-        <label>2. 繪圖註記 (Draw)</label>
+        <label>3. 手動繪圖 (Draw)</label>
         <div class="draw-tools">
             <button onclick="setDrawMode('circle')" id="btn-draw-circle">⭕ 畫圓</button>
             <button onclick="setDrawMode('line')" id="btn-draw-line">➖ 畫線</button>
             <button onclick="setDrawMode('text')" id="btn-draw-text">Aa 文字</button>
             <button onclick="setDrawMode(null)" id="btn-draw-cancel" style="background:#ddd; color:#333;">✋ 停止</button>
         </div>
-        <div style="font-size:11px; color:#666; margin-top:5px;">
-            * 畫圓: 拖拉半徑<br>
-            * 畫線: 拖拉起終點<br>
-            * 文字: 點擊地圖輸入
+        <div class="tool-options">
+            <div style="display:flex; align-items:center; gap:5px;">
+                <label style="margin:0">顏色:</label>
+                <input type="color" id="input-color" value="#ff0000" style="width:30px; height:25px; padding:0; border:none; cursor:pointer;">
+            </div>
+            <div style="display:flex; align-items:center; gap:5px;">
+                <label style="margin:0">字級:</label>
+                <input type="number" id="input-font-size" value="16" min="8" max="72" style="width:40px;">
+                <span>px</span>
+            </div>
         </div>
-        <button onclick="clearDrawings()" style="background:#dc3545; margin-top:5px;">🗑️ 清除所有繪圖</button>
+        <button onclick="clearDrawings()" style="background:#dc3545; margin-top:5px;">🗑️ 清除所有手繪</button>
     </div>
 
     <div class="section" style="border-left: 4px solid #28a745;">
-        <label>3. 參考 G-Code (CSV)</label>
+        <label>4. 參考 G-Code (綠點)</label>
         <input type="file" id="ref-csv-input" accept=".csv">
         <div style="margin-top:5px;">
-            <select id="csv-encoding" style="font-size:12px;">
-                <option value="UTF-8">UTF-8</option>
-                <option value="Big5">Big5</option>
-            </select>
+            <select id="csv-encoding" style="font-size:12px;"><option value="UTF-8">UTF-8</option><option value="Big5">Big5</option></select>
             <button onclick="clearRefMarkers()" style="width:auto; float:right; padding:2px 8px; font-size:12px; background:#6c757d;">清除</button>
         </div>
         <div id="ref-status" style="font-size:12px; color:#28a745; margin-top:5px;"></div>
     </div>
 
     <div class="section">
-        <label>4. 標註資料 (紅點)</label>
-        <textarea id="json-input" placeholder='[{"lat": 25.033, "lng": 121.565, "name": "點1", "category": "一般"}]' style="width:100%; height:60px"></textarea>
-        <button class="primary" onclick="importData()">匯入標註 JSON</button>
-        <button onclick="addManualMarker()">➕ 新增標註點</button>
-        <button onclick="clearMarkers()" style="background:#dc3545">清除所有標註</button>
-    </div>
-
-    <div class="section">
-        <button class="success" onclick="exportPDF()">💾 匯出 PDF</button>
+        <button class="success" onclick="exportPDF()">💾 匯出圖層 PDF</button>
         <button class="primary" onclick="saveProject()">📂 儲存專案 (JSON)</button>
         <button onclick="loadProjectClick()">📂 載入專案 (JSON)</button>
         <input type="file" id="project-input" accept=".json" style="display: none;">
@@ -134,23 +147,24 @@
 </div>
 
 <div id="map"></div>
+<canvas id="text-helper-canvas" style="display:none;"></canvas>
+
+<datalist id="list-old-cap">
+    <option value="73W">
+    <option value="112W">
+    <option value="220W">
+    <option value="250W">
+</datalist>
+<datalist id="list-new-cap">
+    <option value="73VA">
+    <option value="88VA">
+</datalist>
 
 <script>
-    // --- 初始設定 ---
+    // --- Init ---
     proj4.defs("EPSG:3828", "+proj=tmerc +lat_0=0 +lon_0=121 +x_0=250000 +y_0=0 +k=0.9999 +ellps=aust_SA +towgs84=-752,-358,-179,-.0000011698,.0000018398,.0000009822,.00002329 +units=m +no_defs");
     proj4.defs("EPSG:4326", "+proj=longlat +datum=WGS84 +no_defs");
-
-    const taiGridMap = {
-        'A': [170000, 2750000], 'B': [250000, 2750000], 'C': [330000, 2750000],
-        'D': [170000, 2700000], 'E': [250000, 2700000], 'F': [330000, 2700000],
-        'G': [170000, 2650000], 'H': [250000, 2650000], 'J': [90000, 2600000],
-        'K': [170000, 2600000], 'L': [250000, 2600000], 'M': [90000, 2550000],
-        'N': [170000, 2550000], 'O': [250000, 2550000], 'P': [90000, 2500000],
-        'Q': [170000, 2500000], 'R': [250000, 2500000], 'T': [170000, 2450000],
-        'U': [250000, 2450000], 'V': [170000, 2400000], 'W': [250000, 2400000],
-        'X': [275000, 2614000], 'Y': [275000, 2564000]
-    };
-
+    const taiGridMap = {'A': [170000, 2750000], 'B': [250000, 2750000], 'C': [330000, 2750000], 'D': [170000, 2700000], 'E': [250000, 2700000], 'F': [330000, 2700000], 'G': [170000, 2650000], 'H': [250000, 2650000], 'J': [90000, 2600000], 'K': [170000, 2600000], 'L': [250000, 2600000], 'M': [90000, 2550000], 'N': [170000, 2550000], 'O': [250000, 2550000], 'P': [90000, 2500000], 'Q': [170000, 2500000], 'R': [250000, 2500000], 'T': [170000, 2450000], 'U': [250000, 2450000], 'V': [170000, 2400000], 'W': [250000, 2400000], 'X': [275000, 2614000], 'Y': [275000, 2564000]};
     const EXACT_BOUNDS = { "G5050": [[24.183209, 120.613454], [24.176813, 120.623288]] };
 
     let map = L.map('map', { maxZoom: 25 }).setView([24.1800, 120.6200], 16);
@@ -158,11 +172,13 @@
     
     let pdfOverlay = null;
     let pdfDocBytes = null;
+    let currentPdfName = "map"; // 儲存檔名用
     let boundsHandleNW, boundsHandleSE, boundsHandleCenter;
     let isLocked = false;
-    let markersData = [];
     let refMarkersLayer = L.layerGroup().addTo(map);
     let drawnItemsLayer = L.layerGroup().addTo(map);
+    let streetLightsLayer = L.layerGroup().addTo(map); // V15: 路燈專用層
+    let streetLightsData = []; // 儲存路燈資料物件
     let currentBaseBounds = null;
     let currentDrawMode = null;
     let tempDrawShape = null;
@@ -174,12 +190,23 @@
         setTimeout(() => { map.invalidateSize(); }, 300);
     }
 
-    // --- PDF 上傳與複製 ---
+    // --- Helper: Timestamp Name ---
+    function getTimestampedName(baseName, ext) {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const HH = String(now.getHours()).padStart(2, '0');
+        const MM = String(now.getMinutes()).padStart(2, '0');
+        const SS = String(now.getSeconds()).padStart(2, '0');
+        return `${baseName}_${yyyy}${mm}${dd}_${HH}${MM}${SS}.${ext}`;
+    }
+
+    // --- PDF Logic ---
     document.getElementById('pdf-input').addEventListener('change', async function(e) {
         const file = e.target.files[0];
         if (!file) return;
-
-        // 深層複製 Buffer，避免被 Worker 轉移
+        currentPdfName = file.name.replace(/\.[^/.]+$/, ""); // 去除副檔名
         const rawBuffer = await file.arrayBuffer();
         pdfDocBytes = rawBuffer.slice(0);
         const displayBuffer = rawBuffer.slice(0);
@@ -206,7 +233,7 @@
         const loadingTask = pdfjsLib.getDocument(displayBuffer);
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 4 }); // 4K 渲染
+        const viewport = page.getViewport({ scale: 4 }); 
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.height = viewport.height;
@@ -271,7 +298,6 @@
     function createControlHandles(bounds) {
         const icon = L.divIcon({ className: 'handle-icon', iconSize: [12, 12] });
         const centerIcon = L.divIcon({ className: 'move-handle-icon', html: '+', iconSize: [20, 20], iconAnchor: [10, 10] });
-        
         boundsHandleNW = L.marker(bounds[0], { draggable: true, icon: icon }).addTo(map);
         boundsHandleSE = L.marker(bounds[1], { draggable: true, icon: icon }).addTo(map);
         const center = L.latLngBounds(bounds).getCenter();
@@ -325,34 +351,226 @@
     document.getElementById('opacity-slider').addEventListener('input', e => { if(pdfOverlay) pdfOverlay.setOpacity(e.target.value); });
     function showBoundsInfo() { if(pdfOverlay) alert(pdfOverlay.getBounds().toBBoxString()); }
 
-    // --- 繪圖工具 ---
+    // --- V15: Street Lights Import & Logic ---
+    document.getElementById('sl-csv-input').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const encoding = document.getElementById('sl-encoding').value;
+        Papa.parse(file, {
+            header: true, encoding: encoding, skipEmptyLines: true,
+            complete: function(results) {
+                let count = 0;
+                results.data.forEach(row => {
+                    const lat = parseFloat(row['y']), lng = parseFloat(row['x']);
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        createStreetLight({
+                            name: row['name'],
+                            g_code: row['G-code_1st'],
+                            lat: lat,
+                            lng: lng,
+                            origLat: lat,
+                            origLng: lng,
+                            old_cap: "",
+                            new_cap: ""
+                        });
+                        count++;
+                    }
+                });
+                document.getElementById('sl-status').innerText = `✅ 已載入 ${count} 筆路燈`;
+            }
+        });
+    });
+
+    function createStreetLight(data) {
+        // 1. 藍色定位點 (Marker)
+        const marker = L.marker([data.lat, data.lng], {
+            icon: L.divIcon({className:'drag-point-icon', iconSize:[12,12], bgPos:[0,0]}), // 藍點
+            draggable: true
+        }).addTo(streetLightsLayer);
+
+        // 2. 紅色圓圈 (Circle)
+        const circle = L.circle([data.lat, data.lng], {radius: 1, color:'red', weight:2}).addTo(streetLightsLayer);
+
+        // 3. 文字標籤 (Text) - 獨立可拖拉
+        const textLabel = L.marker([data.lat, data.lng], {
+            icon: L.divIcon({ 
+                className: 'text-label', 
+                html: generateLabelHtml(data.name, data.new_cap), 
+                iconSize: [150, 20], iconAnchor: [0, 10]
+            }),
+            interactive: true, draggable: true
+        }).addTo(streetLightsLayer);
+
+        // 儲存關聯
+        const slObj = {
+            id: Date.now() + Math.random(),
+            data: data,
+            layers: { marker, circle, textLabel }
+        };
+        streetLightsData.push(slObj);
+
+        // 連動邏輯
+        marker.on('drag', e => {
+            circle.setLatLng(e.latlng);
+            // 文字跟著動，保持相對位置 (簡單起見，直接跟著動，使用者可再微調文字)
+            textLabel.setLatLng(e.latlng);
+            slObj.data.lat = e.latlng.lat;
+            slObj.data.lng = e.latlng.lng;
+        });
+
+        // 編輯 Popup
+        marker.on('click', () => {
+            const content = document.createElement('div');
+            content.className = 'sl-popup';
+            content.innerHTML = `
+                <label>G-code:</label><input type="text" id="edit-gcode" value="${slObj.data.g_code}">
+                <label>變更前容量:</label><input list="list-old-cap" id="edit-old" value="${slObj.data.old_cap}">
+                <label>變更後容量(VA):</label><input list="list-new-cap" id="edit-new" value="${slObj.data.new_cap}">
+                <button id="btn-save" style="background:#28a745;color:white">確認更新</button>
+                <button id="btn-reset" style="background:#17a2b8;color:white">恢復座標</button>
+            `;
+            // Bind Events
+            content.querySelector('#btn-save').onclick = () => {
+                slObj.data.g_code = content.querySelector('#edit-gcode').value;
+                slObj.data.old_cap = content.querySelector('#edit-old').value;
+                slObj.data.new_cap = content.querySelector('#edit-new').value;
+                // 更新文字標籤
+                const newHtml = generateLabelHtml(slObj.data.name, slObj.data.new_cap);
+                slObj.layers.textLabel.setIcon(L.divIcon({ 
+                    className: 'text-label', html: newHtml, iconSize: [150, 20], iconAnchor: [0, 10]
+                }));
+                marker.closePopup();
+            };
+            content.querySelector('#btn-reset').onclick = () => {
+                const orig = L.latLng(slObj.data.origLat, slObj.data.origLng);
+                marker.setLatLng(orig);
+                circle.setLatLng(orig);
+                textLabel.setLatLng(orig);
+                slObj.data.lat = orig.lat; slObj.data.lng = orig.lng;
+                marker.closePopup();
+            };
+            marker.bindPopup(content).openPopup();
+        });
+    }
+
+    function generateLabelHtml(name, cap) {
+        const text = name + (cap ? (" " + cap) : "");
+        return `<div style="color:red;font-size:14px;font-weight:bold;text-shadow:1px 1px 0 #fff;white-space:nowrap;">${text}</div>`;
+    }
+
+    function clearStreetLights() {
+        if(confirm("清除所有路燈資料?")) {
+            streetLightsLayer.clearLayers();
+            streetLightsData = [];
+            document.getElementById('sl-status').innerText = "";
+        }
+    }
+
+    // V15: Export Registration Sheet (CSV)
+    window.exportRegistrationSheet = function() {
+        if(streetLightsData.length === 0) return alert("無路燈資料");
+        
+        // Template Columns mapping
+        // 序號,變更前電號,變更後電號,行政區,裝設位置或地址,裝設地點座標,路燈編號(新),變更前燈別,變更前台帳容量,變更前台帳盞數,變更後燈別,變更後容量(VA),變更後盞數,服務所,受理號碼
+        const csvRows = [];
+        // Header
+        csvRows.push(["序號","變更前電號","變更後電號","行政區","裝設位置或地址","裝設地點座標","路燈編號(新)","變更前燈別","變更前台帳容量","變更前台帳盞數","變更後燈別","變更後容量(VA)","變更後盞數","服務所","受理號碼"]);
+        
+        streetLightsData.forEach((item, index) => {
+            const d = item.data;
+            const row = [
+                index + 1, // 序號
+                "", "", "", "", // 前四項留白
+                d.g_code || "", // 裝設地點座標
+                d.name || "",   // 路燈編號(新)
+                "",             // 變更前燈別
+                d.old_cap || "", // 變更前台帳容量
+                "",             // 變更前台帳盞數
+                "",             // 變更後燈別
+                d.new_cap || "", // 變更後容量(VA)
+                "", "", ""      // 後三項留白
+            ];
+            // 處理 CSV 逗號與引號
+            const safeRow = row.map(field => {
+                const s = String(field);
+                if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+                    return `"${s.replace(/"/g, '""')}"`;
+                }
+                return s;
+            });
+            csvRows.push(safeRow.join(","));
+        });
+
+        const csvContent = "\uFEFF" + csvRows.join("\n"); // BOM for Excel
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const fname = getTimestampedName(currentPdfName + "_登記單", "csv");
+        link.href = URL.createObjectURL(blob);
+        link.download = fname;
+        link.click();
+    };
+
+    // --- Drawing Tools (Legacy V14) ---
     window.setDrawMode = function(mode) {
         currentDrawMode = mode;
         map.dragging.enable();
         document.querySelectorAll('.draw-tools button').forEach(b => b.classList.remove('active'));
         if(mode) {
             document.getElementById('btn-draw-'+mode).classList.add('active');
-            map.dragging.disable(); 
-            map.getContainer().style.cursor = 'crosshair';
+            map.dragging.disable(); map.getContainer().style.cursor = 'crosshair';
         } else { map.getContainer().style.cursor = ''; }
     };
     window.clearDrawings = function() { if(confirm("確定清除?")) drawnItemsLayer.clearLayers(); };
+
+    function createEditableCircle(latlng, radius, color) {
+        const group = L.layerGroup().addTo(drawnItemsLayer);
+        group.drawType = 'circle'; group.color = color;
+        const circle = L.circle(latlng, {radius: radius, color: color, weight:2}).addTo(group);
+        const handle = L.marker(latlng, {icon:L.divIcon({className:'drag-point-icon', iconSize:[12,12]}), draggable:true}).addTo(group);
+        handle.on('drag', evt => { circle.setLatLng(evt.latlng); });
+        const popupContent = document.createElement('div');
+        popupContent.innerHTML = '<button class="delete-btn">刪除此圓</button>';
+        popupContent.querySelector('button').onclick = () => { drawnItemsLayer.removeLayer(group); };
+        handle.bindPopup(popupContent);
+        return { group, circle, handle };
+    }
+    function createEditableLine(latlngs, color) {
+        const group = L.layerGroup().addTo(drawnItemsLayer);
+        group.drawType = 'line'; group.color = color;
+        const line = L.polyline(latlngs, {color: color, weight:3}).addTo(group);
+        const h1 = L.marker(latlngs[0], {icon:L.divIcon({className:'drag-point-icon', iconSize:[12,12]}), draggable:true}).addTo(group);
+        const h2 = L.marker(latlngs[1], {icon:L.divIcon({className:'drag-point-icon', iconSize:[12,12]}), draggable:true}).addTo(group);
+        const updateLine = () => { line.setLatLngs([h1.getLatLng(), h2.getLatLng()]); };
+        h1.on('drag', updateLine); h2.on('drag', updateLine);
+        const popupContent = document.createElement('div');
+        popupContent.innerHTML = '<button class="delete-btn">刪除此線</button>';
+        popupContent.querySelector('button').onclick = () => { drawnItemsLayer.removeLayer(group); };
+        line.bindPopup(popupContent);
+        return { group, line };
+    }
+    function createEditableText(latlng, text, fontSize, color) {
+        const marker = L.marker(latlng, {
+            icon: L.divIcon({ className: 'text-label', html: `<div style="color:${color};font-size:${fontSize}px;font-weight:bold;text-shadow:1px 1px 0 #fff;white-space:nowrap;line-height:20px;">${text}</div>`, iconSize: [100, 20], iconAnchor: [0, 10] }),
+            interactive: true, draggable: true
+        }).addTo(drawnItemsLayer);
+        marker.drawType = 'text'; marker.textContent = text; marker.fontSize = fontSize; marker.color = color;
+        const popupContent = document.createElement('div');
+        popupContent.innerHTML = '<button class="delete-btn">刪除文字</button>';
+        popupContent.querySelector('button').onclick = () => { drawnItemsLayer.removeLayer(marker); };
+        marker.bindPopup(popupContent);
+        return marker;
+    }
 
     let startPoint = null;
     map.on('mousedown', function(e) {
         if(!currentDrawMode) return;
         startPoint = e.latlng;
-        if(currentDrawMode === 'circle') tempDrawShape = L.circle(startPoint, {radius: 1, color:'red', weight:2}).addTo(drawnItemsLayer);
-        else if(currentDrawMode === 'line') tempDrawShape = L.polyline([startPoint, startPoint], {color:'red', weight:3}).addTo(drawnItemsLayer);
+        const color = document.getElementById('input-color').value;
+        if(currentDrawMode === 'circle') tempDrawShape = L.circle(startPoint, {radius: 1, color:color, weight:2}).addTo(map);
+        else if(currentDrawMode === 'line') tempDrawShape = L.polyline([startPoint, startPoint], {color:color, weight:3}).addTo(map);
         else if(currentDrawMode === 'text') {
             const text = prompt("輸入文字:", "註記");
-            if(text) {
-                const marker = L.marker(startPoint, {
-                    icon: L.divIcon({ className: 'text-label', html: `<div style="color:red;font-size:16px;font-weight:bold;text-shadow:1px 1px 0 #fff;">${text}</div>`, iconSize: [100, 20] }),
-                    interactive: true, draggable: true
-                }).addTo(drawnItemsLayer);
-                marker.drawType = 'text'; marker.textContent = text;
-            }
+            if(text) { const fs = document.getElementById('input-font-size').value || 16; createEditableText(startPoint, text, fs, color); }
             setDrawMode(null);
         }
     });
@@ -363,11 +581,15 @@
     });
     map.on('mouseup', function(e) {
         if(!currentDrawMode || !startPoint) return;
-        if(tempDrawShape) tempDrawShape.drawType = currentDrawMode;
+        const color = document.getElementById('input-color').value;
+        if(tempDrawShape) {
+            if(currentDrawMode === 'circle') { const r = tempDrawShape.getRadius(); map.removeLayer(tempDrawShape); createEditableCircle(startPoint, r, color); }
+            else if (currentDrawMode === 'line') { const lls = tempDrawShape.getLatLngs(); map.removeLayer(tempDrawShape); createEditableLine(lls, color); }
+        }
         startPoint = null; tempDrawShape = null; setDrawMode(null);
     });
 
-    // --- CSV & Markers ---
+    // --- CSV Ref ---
     document.getElementById('ref-csv-input').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -389,6 +611,7 @@
     });
     function clearRefMarkers() { refMarkersLayer.clearLayers(); }
     
+    // --- Manual Markers ---
     function addMarkerToMap(lat, lng, name, category, id=null) {
         const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
         const dataId = id || Date.now().toString();
@@ -401,11 +624,11 @@
     function addManualMarker(){ addMarkerToMap(map.getCenter().lat, map.getCenter().lng, '新點', '一般'); }
     function clearMarkers(){ markersData.forEach(d=>map.removeLayer(d.markerRef)); markersData=[]; }
 
-    // --- 匯出 PDF (修復 Annots Array 錯誤) ---
+    // --- Export PDF (Include V15 Street Lights) ---
     async function exportPDF() {
         if (!pdfDocBytes || !pdfOverlay) return alert("請先上傳 PDF");
         try {
-            const { PDFDocument, PDFHexString } = PDFLib;
+            const { PDFDocument, rgb } = PDFLib;
             const pdfDoc = await PDFDocument.load(pdfDocBytes);
             const page = pdfDoc.getPages()[0];
             const { width: pdfW, height: pdfH } = page.getSize();
@@ -415,104 +638,150 @@
             function toPdfPoint(lat, lng) {
                 return { x: ((lng - west)/(east - west))*pdfW, y: ((lat - south)/(north - south))*pdfH };
             }
+            const hexToRgb = (hex) => {
+                const r = parseInt(hex.slice(1, 3), 16) / 255;
+                const g = parseInt(hex.slice(3, 5), 16) / 255;
+                const b = parseInt(hex.slice(5, 7), 16) / 255;
+                return rgb(r, g, b);
+            }
+            async function textToImageBytes(text, fontSize, color) {
+                const c = document.getElementById('text-helper-canvas');
+                const ctx = c.getContext('2d');
+                const scale = 3; const fontStr = `bold ${fontSize * scale}px "Microsoft JhengHei", sans-serif`; 
+                ctx.font = fontStr;
+                const metrics = ctx.measureText(text);
+                const w = Math.ceil(metrics.width); const h = Math.ceil(fontSize * scale * 1.5); 
+                c.width = w; c.height = h;
+                ctx.font = fontStr; ctx.fillStyle = color; ctx.textBaseline = 'middle';
+                ctx.fillText(text, 0, h/2);
+                return new Promise(resolve => { c.toBlob(blob => { blob.arrayBuffer().then(resolve); }, 'image/png'); });
+            }
 
-            // 1. Markers
+            // 1. Street Lights (V15)
+            for (const sl of streetLightsData) {
+                const lat = sl.layers.circle.getLatLng().lat;
+                const lng = sl.layers.circle.getLatLng().lng;
+                const pt = toPdfPoint(lat, lng);
+                
+                // Draw Red Circle
+                // Radius approximation
+                const edgePt = toPdfPoint(lat + 1/111111, lng);
+                const pdfR = Math.abs(edgePt.y - pt.y);
+                page.drawCircle({ x: pt.x, y: pt.y, size: pdfR, borderColor: rgb(1,0,0), borderWidth: 2 });
+
+                // Draw Text (Movable position)
+                const textLat = sl.layers.textLabel.getLatLng().lat;
+                const textLng = sl.layers.textLabel.getLatLng().lng;
+                const txtPt = toPdfPoint(textLat, textLng);
+                
+                const labelText = sl.data.name + (sl.data.new_cap ? (" " + sl.data.new_cap) : "");
+                if(labelText.trim()) {
+                    const pngBytes = await textToImageBytes(labelText, 14, '#ff0000');
+                    const pngImage = await pdfDoc.embedPng(pngBytes);
+                    const dims = pngImage.scale(0.25);
+                    page.drawImage(pngImage, { x: txtPt.x, y: txtPt.y - (dims.height/2), width: dims.width, height: dims.height });
+                }
+            }
+
+            // 2. Manual Markers
             for (const p of markersData) {
                 if (p.lat > north || p.lat < south || p.lng > east || p.lng < west) continue;
                 const pt = toPdfPoint(p.lat, p.lng);
-                const text = (p.name||'') + " (" + (p.category||'') + ")";
-                const annot = pdfDoc.context.obj({
-                    Type: 'Annot', Subtype: 'Square',
-                    Rect: [pt.x-5, pt.y-5, pt.x+5, pt.y+5], C: [1, 0, 0], IC: [1, 0, 0],
-                    Contents: createPdfHexString(text), T: createPdfHexString(p.category||'Note')
-                });
-                addAnnot(page, annot, pdfDoc);
+                page.drawSquare({ x: pt.x - 3, y: pt.y - 3, size: 6, color: rgb(1, 0, 0) });
+                const text = (p.name||'') + " " + (p.category||'');
+                if(text.trim()) {
+                    const pngBytes = await textToImageBytes(text, 12, '#ff0000');
+                    const pngImage = await pdfDoc.embedPng(pngBytes);
+                    const dims = pngImage.scale(0.25); 
+                    page.drawImage(pngImage, { x: pt.x + 5, y: pt.y - (dims.height/2), width: dims.width, height: dims.height });
+                }
             }
 
-            // 2. Drawings
+            // 3. Drawings
             drawnItemsLayer.eachLayer(layer => {
                 if (layer.drawType === 'circle') {
-                    const center = layer.getLatLng();
-                    const pt = toPdfPoint(center.lat, center.lng);
-                    const pdfR = Math.abs(toPdfPoint(center.lat + layer.getRadius()/111111, center.lng).y - pt.y);
-                    const annot = pdfDoc.context.obj({
-                        Type: 'Annot', Subtype: 'Circle',
-                        Rect: [pt.x-pdfR, pt.y-pdfR, pt.x+pdfR, pt.y+pdfR], C: [1, 0, 0], Border: [0, 0, 2],
-                        Contents: createPdfHexString("Circle")
-                    });
-                    addAnnot(page, annot, pdfDoc);
+                    let circleLayer; layer.eachLayer(l => { if(l instanceof L.Circle) circleLayer = l; });
+                    if(circleLayer) {
+                        const pt = toPdfPoint(circleLayer.getLatLng().lat, circleLayer.getLatLng().lng);
+                        const pdfR = Math.abs(toPdfPoint(circleLayer.getLatLng().lat + circleLayer.getRadius()/111111, circleLayer.getLatLng().lng).y - pt.y);
+                        page.drawCircle({ x: pt.x, y: pt.y, size: pdfR, borderColor: hexToRgb(layer.color||'#ff0000'), borderWidth: 2 });
+                    }
                 } else if (layer.drawType === 'line') {
-                    const lls = layer.getLatLngs();
-                    if(lls.length>=2) {
+                    let lineLayer; layer.eachLayer(l => { if(l instanceof L.Polyline) lineLayer = l; });
+                    if(lineLayer) {
+                        const lls = lineLayer.getLatLngs();
                         const p1 = toPdfPoint(lls[0].lat, lls[0].lng), p2 = toPdfPoint(lls[1].lat, lls[1].lng);
-                        const annot = pdfDoc.context.obj({
-                            Type: 'Annot', Subtype: 'Line',
-                            Rect: [Math.min(p1.x,p2.x), Math.min(p1.y,p2.y), Math.max(p1.x,p2.x), Math.max(p1.y,p2.y)],
-                            L: [p1.x, p1.y, p2.x, p2.y], C: [1, 0, 0], Border: [0, 0, 2]
-                        });
-                        addAnnot(page, annot, pdfDoc);
+                        page.drawLine({ start: { x: p1.x, y: p1.y }, end: { x: p2.x, y: p2.y }, thickness: 2, color: hexToRgb(layer.color||'#ff0000') });
                     }
                 } else if (layer.drawType === 'text') {
                     const pt = toPdfPoint(layer.getLatLng().lat, layer.getLatLng().lng);
-                    const annot = pdfDoc.context.obj({
-                        Type: 'Annot', Subtype: 'FreeText',
-                        Rect: [pt.x, pt.y, pt.x+100, pt.y+20],
-                        Contents: createPdfHexString(layer.textContent||""),
-                        DA: PDFLib.PDFString.of("/Helv 12 Tf 1 0 0 rg")
-                    });
-                    addAnnot(page, annot, pdfDoc);
+                    const fs = parseInt(layer.fontSize || 16);
+                    if(layer.textContent) {
+                        (async () => {
+                            const pngBytes = await textToImageBytes(layer.textContent, fs, layer.color||'#ff0000');
+                            const pngImage = await pdfDoc.embedPng(pngBytes);
+                            const dims = pngImage.scale(0.25);
+                            page.drawImage(pngImage, { x: pt.x, y: pt.y - (dims.height/2), width: dims.width, height: dims.height });
+                        })();
+                    }
                 }
             });
+            
+            await new Promise(r => setTimeout(r, 800)); // wait for images
 
             const outBytes = await pdfDoc.save();
             const blob = new Blob([outBytes], { type: 'application/pdf' });
             const link = document.createElement('a');
+            const fname = getTimestampedName(currentPdfName, "pdf");
             link.href = URL.createObjectURL(blob);
-            link.download = 'annotated_map.pdf';
+            link.download = fname;
             document.body.appendChild(link); link.click(); document.body.removeChild(link);
         } catch (err) { console.error(err); alert("匯出錯誤：" + err.message); }
     }
 
-    // 關鍵修正：將註釋正確加入 Annots 陣列
-    function addAnnot(page, annot, pdfDoc) {
-        const annotRef = pdfDoc.context.register(annot); // 1. 註冊為 Reference
-        let annots = page.node.Annots();
-        if (!annots) {
-            // 2. 若陣列不存在，建立一個新的 PDFArray 包含該 Reference
-            const annotsArray = pdfDoc.context.obj([annotRef]);
-            const annotsRef = pdfDoc.context.register(annotsArray);
-            page.node.set(PDFLib.PDFName.of('Annots'), annotsRef);
-        } else {
-            // 3. 若已存在，推入 Reference
-            annots.push(annotRef);
-        }
-    }
-
-    function createPdfHexString(text) {
-        if (!text) return PDFLib.PDFHexString.of('FEFF'); 
-        let hex = 'FEFF';
-        for (let i = 0; i < text.length; i++) {
-            let code = text.charCodeAt(i).toString(16).toUpperCase();
-            while (code.length < 4) code = '0' + code;
-            hex += code;
-        }
-        return PDFLib.PDFHexString.of(hex);
-    }
-
-    // --- 專案存檔 ---
+    // --- Save/Load Project (V15: Include Street Lights) ---
     function saveProject() {
         if(!pdfOverlay) return;
         const b = pdfOverlay.getBounds();
+        const drawings = [];
+        drawnItemsLayer.eachLayer(layer => {
+            if(layer.drawType === 'circle') {
+                let c; layer.eachLayer(l => { if(l instanceof L.Circle) c = l; });
+                if(c) drawings.push({ type: 'circle', lat: c.getLatLng().lat, lng: c.getLatLng().lng, radius: c.getRadius(), color: layer.color });
+            } else if(layer.drawType === 'line') {
+                let l; layer.eachLayer(line => { if(line instanceof L.Polyline) l = line; });
+                if(l) drawings.push({ type: 'line', latlngs: l.getLatLngs(), color: layer.color });
+            } else if(layer.drawType === 'text') {
+                drawings.push({ type: 'text', lat: layer.getLatLng().lat, lng: layer.getLatLng().lng, content: layer.textContent, fontSize: layer.fontSize, color: layer.color });
+            }
+        });
+        
+        // V15: Save Street Light Data
+        const sls = streetLightsData.map(sl => {
+            return {
+                data: sl.data,
+                // save positions (might be moved)
+                lat: sl.layers.marker.getLatLng().lat,
+                lng: sl.layers.marker.getLatLng().lng,
+                textLat: sl.layers.textLabel.getLatLng().lat,
+                textLng: sl.layers.textLabel.getLatLng().lng
+            };
+        });
+
         const data = {
             bounds: { north: b.getNorth(), south: b.getSouth(), east: b.getEast(), west: b.getWest() },
-            markers: markersData.map(d => ({ lat:d.lat, lng:d.lng, name:d.name, category:d.category }))
+            markers: markersData.map(d => ({ lat:d.lat, lng:d.lng, name:d.name, category:d.category })),
+            drawings: drawings,
+            streetLights: sls
         };
         const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
         const link = document.createElement('a');
+        const fname = getTimestampedName(currentPdfName, "json");
         link.href = URL.createObjectURL(blob);
-        link.download = 'project.json';
+        link.download = fname;
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
     }
+
     function loadProjectClick() { document.getElementById('project-input').click(); }
     document.getElementById('project-input').addEventListener('change', e => {
         const file = e.target.files[0];
@@ -531,7 +800,36 @@
                     clearMarkers();
                     d.markers.forEach(p => addMarkerToMap(p.lat, p.lng, p.name, p.category));
                 }
-            } catch(err) { alert("讀取失敗"); }
+                if(d.drawings) {
+                    clearDrawings(); 
+                    drawnItemsLayer.clearLayers(); 
+                    d.drawings.forEach(item => {
+                        const color = item.color || '#ff0000';
+                        if(item.type === 'circle') createEditableCircle([item.lat, item.lng], item.radius, color);
+                        else if(item.type === 'line') createEditableLine(item.latlngs, color);
+                        else if(item.type === 'text') createEditableText([item.lat, item.lng], item.content, item.fontSize, color);
+                    });
+                }
+                // V15: Restore Street Lights
+                if(d.streetLights) {
+                    clearStreetLights();
+                    // Bypass confirmation for load
+                    streetLightsLayer.clearLayers(); streetLightsData = [];
+                    d.streetLights.forEach(item => {
+                        createStreetLight(item.data); // Create base
+                        // Apply moved positions
+                        const sl = streetLightsData[streetLightsData.length-1];
+                        const newPt = L.latLng(item.lat, item.lng);
+                        sl.layers.marker.setLatLng(newPt);
+                        sl.layers.circle.setLatLng(newPt);
+                        sl.layers.textLabel.setLatLng([item.textLat, item.textLng]);
+                        // Update text content in case it was saved with edits
+                        const newHtml = generateLabelHtml(item.data.name, item.data.new_cap);
+                        sl.layers.textLabel.setIcon(L.divIcon({ className: 'text-label', html: newHtml, iconSize: [150, 20], iconAnchor: [0, 10] }));
+                    });
+                    document.getElementById('sl-status').innerText = `✅ 已還原 ${d.streetLights.length} 筆路燈`;
+                }
+            } catch(err) { console.error(err); alert("讀取失敗"); }
         };
         reader.readAsText(file);
     });
