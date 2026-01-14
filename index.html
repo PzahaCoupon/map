@@ -13,26 +13,22 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
     <style>
-        /* V21: Professional Slate & Blue Theme (極簡專業風格) */
+        /* V23 Final: Professional Theme */
         :root {
-            --bg-body: #ebedef;        /* 淺灰底色 */
-            --bg-sidebar: #ffffff;     /* 純白側邊欄 */
-            --text-primary: #2c3e50;   /* 深灰藍文字 */
-            --text-secondary: #7f8c8d; /* 次要文字 */
-            
-            /* 統一色系，不再使用繽紛色 */
-            --color-brand: #2c3e50;    /* 品牌主色 (深岩灰) */
-            --color-accent: #2980b9;   /* 連結/亮點色 (專業藍) */
-            --color-danger: #c0392b;   /* 警示色 (暗紅) */
-            --color-success: #27ae60;  /* 成功色 (森林綠) */
-            --color-neutral: #95a5a6;  /* 中性色 (灰) */
-            
+            --bg-body: #ebedef;
+            --bg-sidebar: #ffffff;
+            --text-primary: #2c3e50;
+            --text-secondary: #7f8c8d;
+            --color-brand: #2c3e50;
+            --color-accent: #2980b9;
+            --color-danger: #c0392b;
+            --color-success: #27ae60;
+            --color-neutral: #95a5a6;
             --border-light: #dfe6e9;
         }
 
         body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: "Segoe UI", "Microsoft JhengHei", sans-serif; overflow: hidden; color: var(--text-primary); background: var(--bg-body); }
         
-        /* 側邊欄樣式 */
         .sidebar { 
             width: 360px; background: var(--bg-sidebar); padding: 20px; 
             display: flex; flex-direction: column; overflow-y: auto; z-index: 1000; 
@@ -56,37 +52,37 @@
             box-shadow: 2px 0 5px rgba(0,0,0,0.1); z-index: 2000;
         }
 
-        /* 區塊樣式 - V21: 統一左側邊框顏色 */
         .section { 
             margin-bottom: 18px; border: 1px solid var(--border-light); 
             padding: 15px; background: #fdfdfd; border-radius: 6px; 
-            border-left: 4px solid var(--color-brand); /* 統一使用深岩灰 */
+            border-left: 4px solid var(--color-brand);
             box-shadow: 0 2px 6px rgba(0,0,0,0.03);
         }
         
         label { display: block; font-weight: 700; margin-bottom: 8px; font-size: 13px; color: var(--text-primary); }
         
-        /* 按鈕樣式統一 */
         button { 
             width: 100%; padding: 9px; margin-top: 8px; cursor: pointer; 
             border: 1px solid transparent; border-radius: 4px; 
             color: white; font-weight: 600; font-size: 13px; transition: all 0.2s;
-            background: var(--color-neutral); /* 預設灰色 */
+            background: var(--color-neutral);
         }
         button:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         button:active { transform: translateY(0); }
 
-        /* 功能性按鈕配色 */
-        button.primary { background: var(--color-brand); }   /* 深色主按鈕 */
-        button.action  { background: var(--color-accent); }  /* 藍色動作按鈕 */
-        button.success { background: var(--color-success); } /* 綠色成功按鈕 */
-        button.danger  { background: var(--color-danger); }  /* 紅色危險按鈕 */
+        button.primary { background: var(--color-brand); }
+        button.action  { background: var(--color-accent); }
+        button.success { background: var(--color-success); }
+        button.danger  { background: var(--color-danger); }
         button.outline { background: transparent; border: 1px solid var(--text-secondary); color: var(--text-secondary); }
         button.outline:hover { background: #f1f1f1; color: var(--text-primary); }
 
+        .filter-controls { display: flex; gap: 5px; margin-top: 10px; align-items: center; }
+        .filter-controls select { flex: 1; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; color: var(--text-primary); }
+        .filter-controls button { margin-top: 0; width: auto; font-size: 12px; padding: 6px 10px; }
+
         #map { flex: 1; height: 100%; z-index: 0; cursor: crosshair; background: #e0e0e0; }
         
-        /* 地圖控制點樣式 */
         .handle-icon { background: rgba(255, 255, 255, 0.9); border: 1px solid #333; border-radius: 50%; cursor: nwse-resize; box-shadow: 0 0 4px rgba(0,0,0,0.3); }
         .move-handle-icon { background: var(--color-brand); border: 2px solid white; border-radius: 4px; color: white; text-align: center; font-size: 16px; line-height: 18px; cursor: move; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
         .drag-point-icon { background: var(--color-accent); border: 2px solid white; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.4); cursor: move; }
@@ -103,7 +99,6 @@
         
         .tool-options { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; background: #f8f9fa; padding: 8px; border-radius: 4px; border: 1px solid #eee; }
         
-        /* 懸浮編輯面板 - V21: 專業風格 */
         #edit-panel {
             position: absolute; top: 80px; left: 420px; width: 280px;
             background: #ffffff; border: 1px solid #ccc; border-radius: 6px;
@@ -136,7 +131,7 @@
     <h3>⚡ 台電送件小幫手</h3>
 
     <div class="section">
-        <label>1. 底圖設定 (PDF)</label>
+        <label>1. 底圖設定(台帳圖資PDF)</label>
         <input type="file" id="pdf-input" accept="application/pdf" style="width:100%">
         <div id="auto-detect-msg" class="status-msg"></div>
         <div style="margin-top:10px; display:flex; gap:10px;">
@@ -162,25 +157,10 @@
             <button class="outline" onclick="showBoundsInfo()">📋 邊界</button>
         </div>
     </div>
-    
-    <div class="section">
-        <label>2. 路燈資料匯入 (CSV)</label>
-        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">欄位: name, x, y, G-code_1st</div>
-        <input type="file" id="sl-csv-input" accept=".csv" style="width:100%">
-        
-        <div style="margin-top:10px; display:flex; gap:5px; align-items:center;">
-            <select id="sl-encoding" style="font-size:12px; padding:4px; border:1px solid #ccc; border-radius:3px;"><option value="UTF-8">UTF-8</option><option value="Big5">Big5</option></select>
-            <div style="flex:1;"></div>
-            <button onclick="clearStreetLights()" style="width:auto; margin:0; padding:5px 10px; font-size:11px; background:var(--color-neutral);">清除</button>
-        </div>
-        <div id="sl-status" style="font-size:12px; color:var(--color-accent); margin-top:5px; font-weight:bold;"></div>
-        
-        <button class="action" onclick="exportRegistrationSheet()" style="margin-top:10px;">📊 匯出登記單 (Excel)</button>
-    </div>
 
     <div class="section">
-        <label>3. 參考 G-Code (綠點)</label>
-        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">* 匯出時自動帶入 G-W 到燈別欄</div>
+        <label>2. 參考 G-Code (綠點)</label>
+        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">* 欄位: G-code, G-x, G-y, G-W</div>
         <input type="file" id="ref-csv-input" accept=".csv" style="width:100%">
         <div style="margin-top:10px; display:flex; gap:5px; align-items:center;">
             <select id="csv-encoding" style="font-size:12px; padding:4px; border:1px solid #ccc; border-radius:3px;"><option value="UTF-8">UTF-8</option><option value="Big5">Big5</option></select>
@@ -188,6 +168,33 @@
             <button onclick="clearRefMarkers()" style="width:auto; margin:0; padding:5px 10px; font-size:11px; background:var(--color-neutral);">清除</button>
         </div>
         <div id="ref-status" style="font-size:12px; color:var(--color-success); margin-top:5px; font-weight:bold;"></div>
+    </div>
+    
+    <div class="section">
+        <label>3. 路燈資料匯入 (OUTPUT.csv)</label>
+        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">* 欄位: name, x, y, G-code_1st</div>
+        <input type="file" id="sl-csv-input" accept=".csv" style="width:100%">
+        
+        <div style="margin-top:8px; display:flex; gap:5px; align-items:center;">
+            <select id="sl-encoding" style="font-size:12px; padding:4px; border:1px solid #ccc; border-radius:3px;"><option value="UTF-8">UTF-8</option><option value="Big5">Big5</option></select>
+            <div style="flex:1;"></div>
+            <button onclick="clearStreetLights()" style="width:auto; margin:0; padding:5px 10px; font-size:11px; background:var(--color-neutral);">清除</button>
+        </div>
+        
+        <label style="margin-top:12px; margin-bottom:4px; font-size:12px;">篩選與操作:</label>
+        <div class="filter-controls">
+            <select id="sl-filter" onchange="updateFilter()">
+                <option value="all">👁️ 顯示全部</option>
+                <option value="器變">🔧 器變</option>
+                <option value="容變">💡 容變 (LED)</option>
+                <option value="增設">➕ 增設</option>
+                <option value="待確認">❓ 待確認 (無G-code)</option>
+            </select>
+            <button class="success" onclick="addManualStreetLight()">➕ 手動新增</button>
+        </div>
+        <div id="sl-status" style="font-size:12px; color:var(--color-accent); margin-top:5px; font-weight:bold;"></div>
+        
+        <button class="action" onclick="exportRegistrationSheet()" style="margin-top:10px;">📊 匯出篩選後登記單</button>
     </div>
 
     <div class="section">
@@ -212,7 +219,7 @@
     </div>
 
     <div class="section" style="border-left:none; background:transparent; padding:0; box-shadow:none;">
-        <button class="primary" onclick="exportPDF()" style="font-size:15px; padding:12px; margin-bottom:10px;">💾 匯出圖層 PDF</button>
+        <button class="primary" onclick="exportPDF()" style="font-size:15px; padding:12px; margin-bottom:10px;">💾 匯出圖層 PDF (含篩選)</button>
         <div style="display:flex; gap:8px;">
             <button class="outline" onclick="saveProject()" style="background:#fff;">📂 儲存專案</button>
             <button class="outline" onclick="loadProjectClick()" style="background:#fff;">📂 載入專案</button>
@@ -229,8 +236,12 @@
         <button class="close-panel-btn" onclick="closeEditPanel()">×</button>
     </div>
     <div class="panel-body">
+        <div style="margin-bottom:10px; padding:5px; background:#f0f8ff; border:1px solid #b6d4fe; border-radius:4px; font-size:12px;">
+            當前類別: <b id="edit-type-display" style="color:var(--color-accent)">--</b>
+        </div>
+
         <label>G-code (座標):</label>
-        <input type="text" id="edit-gcode" placeholder="G0000...">
+        <input type="text" id="edit-gcode" placeholder="留空視為增設..." onchange="updateEditProcessType()">
         
         <label>變更前容量:</label>
         <input list="list-old-cap" id="edit-old" placeholder="例如: 73W">
@@ -247,9 +258,6 @@
         <div class="panel-buttons">
             <button id="btn-panel-save" class="action">確認更新</button>
             <button id="btn-panel-reset" class="outline" style="color:var(--text-primary); border-color:#ccc;">恢復位置</button>
-        </div>
-        <div style="font-size:11px; color:var(--text-secondary); margin-top:10px; text-align:center;">
-            (提示: 面板開啟時可拖曳紅字)
         </div>
     </div>
 </div>
@@ -286,8 +294,9 @@
     let drawnItemsLayer = L.layerGroup().addTo(map);
     let streetLightsLayer = L.layerGroup().addTo(map);
     let streetLightsData = []; 
-    let markersData = []; 
+    // V23: Removed legacy markersData
     let refDataMap = {}; 
+    let refMarkersData = []; 
     let currentBaseBounds = null;
     let currentDrawMode = null;
     let tempDrawShape = null;
@@ -492,25 +501,36 @@
                 });
                 document.getElementById('sl-status').innerText = `✅ 已載入 ${count} 筆路燈`;
                 inputElem.value = ''; 
+                updateFilter();
             }
         });
     });
 
+    function getProcessType(g_code) {
+        if (!g_code || g_code.trim() === "") return "增設";
+        const gw = refDataMap[g_code];
+        if (!gw) return "待確認"; 
+        if (gw.includes("鈉光燈")) return "器變";
+        if (gw.includes("LED")) return "容變";
+        return "待確認"; 
+    }
+
     function createStreetLight(data) {
         if(!data.radius) data.radius = 7;
+        
+        if(!data.processType) {
+            data.processType = getProcessType(data.g_code);
+        }
 
-        // 1. Marker
         const marker = L.marker([data.lat, data.lng], {
             icon: L.divIcon({className:'drag-point-icon', iconSize:[12,12], bgPos:[0,0]}), 
             draggable: true
         }).addTo(streetLightsLayer);
 
-        marker.bindTooltip(`<b>${data.name}</b><br>${data.g_code}`, { offset: [0, -5], direction: 'top' });
+        marker.bindTooltip(`<b>${data.name}</b><br>${data.g_code}<br><small>[${data.processType}]</small>`, { offset: [0, -5], direction: 'top' });
 
-        // 2. Circle
         const circle = L.circle([data.lat, data.lng], {radius: data.radius, color:'red', weight:2}).addTo(streetLightsLayer);
 
-        // 3. Text (V20/V21 Logic: -45 offset)
         const textLabel = L.marker([data.lat, data.lng], {
             icon: L.divIcon({ 
                 className: 'text-label', 
@@ -541,12 +561,51 @@
         });
     }
 
+    // V23: Manual Add with Name Prompt
+    window.addManualStreetLight = function() {
+        const name = prompt("請輸入路燈名稱/編號:", "新路燈");
+        if(name === null) return; 
+
+        const center = map.getCenter();
+        createStreetLight({
+            name: name || "新路燈",
+            g_code: "", 
+            lat: center.lat,
+            lng: center.lng,
+            origLat: center.lat,
+            origLng: center.lng,
+            old_cap: "",
+            new_cap: "",
+            radius: 7
+        });
+        updateFilter(); 
+    };
+
+    window.updateFilter = function() {
+        const filterVal = document.getElementById('sl-filter').value;
+        streetLightsData.forEach(sl => {
+            const isVisible = (filterVal === 'all') || (sl.data.processType === filterVal);
+            if(isVisible) {
+                if(!map.hasLayer(sl.layers.marker)) {
+                    streetLightsLayer.addLayer(sl.layers.marker);
+                    streetLightsLayer.addLayer(sl.layers.circle);
+                    streetLightsLayer.addLayer(sl.layers.textLabel);
+                }
+            } else {
+                streetLightsLayer.removeLayer(sl.layers.marker);
+                streetLightsLayer.removeLayer(sl.layers.circle);
+                streetLightsLayer.removeLayer(sl.layers.textLabel);
+            }
+        });
+        const visibleCount = streetLightsData.filter(sl => (filterVal === 'all') || (sl.data.processType === filterVal)).length;
+        document.getElementById('sl-status').innerText = `✅ 目前顯示: ${visibleCount} 筆 (${filterVal === 'all' ? '全部' : filterVal})`;
+    };
+
     function generateLabelHtml(name, cap) {
         const text = name + (cap ? `(${cap})` : "");
         return `<div style="color:red;font-size:14px;font-weight:bold;text-shadow:1px 1px 0 #fff;white-space:nowrap;">${text}</div>`;
     }
 
-    // --- Edit Panel & Radius Control ---
     function openEditPanel(slObj) {
         closeEditPanel();
         currentEditingSL = slObj;
@@ -554,6 +613,7 @@
         document.getElementById('edit-gcode').value = slObj.data.g_code || "";
         document.getElementById('edit-old').value = slObj.data.old_cap || "";
         document.getElementById('edit-new').value = slObj.data.new_cap || "";
+        document.getElementById('edit-type-display').innerText = slObj.data.processType || "未知";
         
         const r = slObj.data.radius || 7;
         document.getElementById('edit-radius-slider').value = r;
@@ -578,6 +638,13 @@
         editPanel.style.display = 'none';
     };
 
+    window.updateEditProcessType = function() {
+        if(!currentEditingSL) return;
+        const newCode = document.getElementById('edit-gcode').value;
+        const newType = getProcessType(newCode);
+        document.getElementById('edit-type-display').innerText = newType;
+    }
+
     const rSlider = document.getElementById('edit-radius-slider');
     const rInput = document.getElementById('edit-radius-input');
     
@@ -600,6 +667,8 @@
         slObj.data.g_code = document.getElementById('edit-gcode').value;
         slObj.data.old_cap = document.getElementById('edit-old').value;
         slObj.data.new_cap = document.getElementById('edit-new').value;
+        
+        slObj.data.processType = getProcessType(slObj.data.g_code);
 
         const newHtml = generateLabelHtml(slObj.data.name, slObj.data.new_cap);
         slObj.layers.textLabel.setIcon(L.divIcon({ 
@@ -607,8 +676,10 @@
             iconAnchor: [-45, 10] 
         }));
         
-        slObj.layers.marker.setTooltipContent(`<b>${slObj.data.name}</b><br>${slObj.data.g_code}`);
+        slObj.layers.marker.setTooltipContent(`<b>${slObj.data.name}</b><br>${slObj.data.g_code}<br><small>[${slObj.data.processType}]</small>`);
+        
         closeEditPanel();
+        updateFilter(); 
     };
 
     document.getElementById('btn-panel-reset').onclick = function() {
@@ -651,12 +722,15 @@
     };
 
     window.exportRegistrationSheet = function() {
-        if(streetLightsData.length === 0) return alert("無路燈資料");
+        const filterVal = document.getElementById('sl-filter').value;
+        const exportData = streetLightsData.filter(sl => (filterVal === 'all') || (sl.data.processType === filterVal));
+
+        if(exportData.length === 0) return alert(`目前篩選 (${filterVal}) 無資料可匯出`);
         
         const csvRows = [];
         csvRows.push(["序號","變更前電號","變更後電號","行政區","裝設位置或地址","裝設地點座標","路燈編號(新)","變更前燈別","變更前台帳容量","變更前台帳盞數","變更後燈別","變更後容量(VA)","變更後盞數","服務所","受理號碼"]);
         
-        streetLightsData.forEach((item, index) => {
+        exportData.forEach((item, index) => {
             const d = item.data;
             const matchedGW = refDataMap[d.g_code] || ""; 
 
@@ -667,10 +741,11 @@
                 d.name || "",   
                 matchedGW,          
                 d.old_cap || "", 
-                "",             
-                "",             
+                "1",            
+                "LED",          
                 d.new_cap || "", 
-                "", "", ""      
+                "1",            
+                "", ""      
             ];
             const safeRow = row.map(field => {
                 const s = String(field);
@@ -685,7 +760,8 @@
         const csvContent = "\uFEFF" + csvRows.join("\n"); 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
-        const fname = getTimestampedName(currentPdfName + "_登記單", "csv");
+        const typeName = (filterVal === 'all') ? '全案' : filterVal;
+        const fname = getTimestampedName(`${currentPdfName}_${typeName}登記單`, "csv");
         link.href = URL.createObjectURL(blob);
         link.download = fname;
         link.click();
@@ -779,12 +855,16 @@
             complete: function(results) {
                 let count = 0;
                 refDataMap = {}; 
+                refMarkersData = []; 
                 results.data.forEach(row => {
                     const lat = parseFloat(row['G-y']), lng = parseFloat(row['G-x']);
                     if (!isNaN(lat) && !isNaN(lng)) {
                         if(row['G-code']) {
                             refDataMap[row['G-code']] = row['G-W'] || "";
                         }
+                        const refItem = { lat, lng, code: row['G-code'], w: row['G-W'] };
+                        refMarkersData.push(refItem);
+
                         const popupHtml = `
                             <div style="font-size:14px; display:flex; align-items:center; gap:8px;">
                                 <b style="cursor:pointer; color:#2980b9; text-decoration:underline;" 
@@ -803,23 +883,19 @@
                 });
                 document.getElementById('ref-status').innerText = `✅ 已載入 ${count} 個 (含索引)`;
                 inputElem.value = ''; 
+                
+                streetLightsData.forEach(sl => {
+                    if(!sl.data.processType || sl.data.processType === "待確認") {
+                        sl.data.processType = getProcessType(sl.data.g_code);
+                        sl.layers.marker.setTooltipContent(`<b>${sl.data.name}</b><br>${sl.data.g_code}<br><small>[${sl.data.processType}]</small>`);
+                    }
+                });
+                updateFilter();
             }
         });
     });
-    function clearRefMarkers() { refMarkersLayer.clearLayers(); refDataMap = {}; }
+    function clearRefMarkers() { refMarkersLayer.clearLayers(); refDataMap = {}; refMarkersData = []; }
     
-    function addMarkerToMap(lat, lng, name, category, id=null) {
-        const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
-        const dataId = id || Date.now().toString();
-        marker.bindPopup(`名稱: <input value="${name}" onchange="updateM('${dataId}','name',this.value)"><br>類別: <select onchange="updateM('${dataId}','category',this.value)"><option value="一般">一般</option><option value="待修">待修</option></select><br><button onclick="delM('${dataId}')">刪除</button>`);
-        markersData.push({ id: dataId, lat, lng, name, category, markerRef: marker });
-        marker.on('dragend', e => { const d = markersData.find(x=>x.id===dataId); if(d) { d.lat=e.target.getLatLng().lat; d.lng=e.target.getLatLng().lng; }});
-    }
-    window.updateM=(id,f,v)=>{const d=markersData.find(x=>x.id===id);if(d)d[f]=v;};
-    window.delM=(id)=>{const idx=markersData.findIndex(x=>x.id===id);if(idx>=0){map.removeLayer(markersData[idx].markerRef);markersData.splice(idx,1);}};
-    function addManualMarker(){ addMarkerToMap(map.getCenter().lat, map.getCenter().lng, '新點', '一般'); }
-    function clearMarkers(){ markersData.forEach(d=>map.removeLayer(d.markerRef)); markersData=[]; }
-
     async function exportPDF() {
         if (!pdfDocBytes || !pdfOverlay) return alert("請先上傳 PDF");
         try {
@@ -852,7 +928,11 @@
                 return new Promise(resolve => { c.toBlob(blob => { blob.arrayBuffer().then(resolve); }, 'image/png'); });
             }
 
+            const currentFilter = document.getElementById('sl-filter').value;
+
             for (const sl of streetLightsData) {
+                if(currentFilter !== 'all' && sl.data.processType !== currentFilter) continue;
+
                 const lat = sl.layers.circle.getLatLng().lat;
                 const lng = sl.layers.circle.getLatLng().lng;
                 const pt = toPdfPoint(lat, lng);
@@ -872,28 +952,12 @@
                     const pngBytes = await textToImageBytes(labelText, 14, '#ff0000');
                     const pngImage = await pdfDoc.embedPng(pngBytes);
                     const dims = pngImage.scale(0.25);
-                    // V20/V21: Consistent PDF Offset
                     page.drawImage(pngImage, { 
                         x: txtPt.x + 18, 
                         y: txtPt.y - (dims.height/2), 
                         width: dims.width, 
                         height: dims.height 
                     });
-                }
-            }
-
-            if(typeof markersData !== 'undefined') {
-                for (const p of markersData) {
-                    if (p.lat > north || p.lat < south || p.lng > east || p.lng < west) continue;
-                    const pt = toPdfPoint(p.lat, p.lng);
-                    page.drawSquare({ x: pt.x - 3, y: pt.y - 3, size: 6, color: rgb(1, 0, 0) });
-                    const text = (p.name||'') + " " + (p.category||'');
-                    if(text.trim()) {
-                        const pngBytes = await textToImageBytes(text, 12, '#ff0000');
-                        const pngImage = await pdfDoc.embedPng(pngBytes);
-                        const dims = pngImage.scale(0.25); 
-                        page.drawImage(pngImage, { x: pt.x + 5, y: pt.y - (dims.height/2), width: dims.width, height: dims.height });
-                    }
                 }
             }
 
@@ -966,9 +1030,10 @@
 
         const data = {
             bounds: { north: b.getNorth(), south: b.getSouth(), east: b.getEast(), west: b.getWest() },
-            markers: markersData.map(d => ({ lat:d.lat, lng:d.lng, name:d.name, category:d.category })),
+            // V23 Final: Remove legacy markers save
             drawings: drawings,
-            streetLights: sls
+            streetLights: sls,
+            refMarkers: refMarkersData
         };
         const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
         const link = document.createElement('a');
@@ -986,21 +1051,53 @@
         reader.onload = evt => {
             try {
                 const d = JSON.parse(evt.target.result);
+                
+                // Clear existing
                 clearStreetLights(true); 
-                clearMarkers();
+                clearRefMarkers(); 
                 clearDrawings(true); 
                 drawnItemsLayer.clearLayers(); 
 
+                // Restore Bounds
                 if(d.bounds && pdfOverlay) {
                     const b = [[d.bounds.north, d.bounds.west], [d.bounds.south, d.bounds.east]];
                     pdfOverlay.setBounds(b);
                     map.fitBounds(b);
                     if(!isLocked) { clearControlHandles(); createControlHandles(pdfOverlay.getBounds()); }
                 }
-                if(d.markers) {
-                    d.markers.forEach(p => addMarkerToMap(p.lat, p.lng, p.name, p.category));
+                
+                // Restore Ref Markers (Safe Check)
+                if(d.refMarkers && Array.isArray(d.refMarkers)) {
+                    refMarkersData = d.refMarkers;
+                    let count = 0;
+                    d.refMarkers.forEach(row => {
+                        const lat = row.lat, lng = row.lng;
+                        if(row.code) refDataMap[row.code] = row.w || "";
+                        
+                        const popupHtml = `
+                            <div style="font-size:14px; display:flex; align-items:center; gap:8px;">
+                                <b style="cursor:pointer; color:#2980b9; text-decoration:underline;" 
+                                   title="點擊複製" 
+                                   onclick="navigator.clipboard.writeText('${row.code}').then(()=>alert('已複製: ${row.code}'))">
+                                   ${row.code}
+                                </b>
+                                <span style="font-size:12px; color:#666;">(點擊複製)</span>
+                            </div>
+                            <div style="margin-top:4px;">${row.w||''}</div>
+                        `;
+                        L.circleMarker([lat, lng], { color: 'green', fillColor: '#90EE90', fillOpacity: 0.8, radius: 5 })
+                         .bindPopup(popupHtml).addTo(refMarkersLayer);
+                        count++;
+                    });
+                    document.getElementById('ref-status').innerText = `✅ 已還原 ${count} 個 (含索引)`;
+                } else {
+                    refMarkersData = []; 
                 }
-                if(d.drawings) {
+
+                // V23 Final: Remove Legacy Markers Load Block completely
+
+                // Restore Drawings
+                if(d.drawings && Array.isArray(d.drawings)) {
                     d.drawings.forEach(item => {
                         const color = item.color || '#ff0000';
                         if(item.type === 'circle') createEditableCircle([item.lat, item.lng], item.radius, color);
@@ -1008,10 +1105,16 @@
                         else if(item.type === 'text') createEditableText([item.lat, item.lng], item.content, item.fontSize, color);
                     });
                 }
-                if(d.streetLights) {
+
+                // Restore Street Lights
+                if(d.streetLights && Array.isArray(d.streetLights)) {
                     d.streetLights.forEach(item => {
                         createStreetLight(item.data); 
+                        
                         const sl = streetLightsData[streetLightsData.length-1];
+                        // Safety check: skip if creation failed
+                        if(!sl) return;
+
                         const newPt = L.latLng(item.lat, item.lng);
                         sl.layers.marker.setLatLng(newPt);
                         sl.layers.circle.setLatLng(newPt);
@@ -1019,12 +1122,16 @@
                         const newHtml = generateLabelHtml(item.data.name, item.data.new_cap);
                         sl.layers.textLabel.setIcon(L.divIcon({ 
                             className: 'text-label', html: newHtml, iconSize: [150, 20], 
-                            iconAnchor: [-45, 10] // V20 Restore anchor
+                            iconAnchor: [-45, 10] 
                         }));
                     });
                     document.getElementById('sl-status').innerText = `✅ 已還原 ${d.streetLights.length} 筆路燈`;
+                    try { updateFilter(); } catch(e) { console.warn("Filter update failed temporarily", e); }
                 }
-            } catch(err) { console.error(err); alert("讀取失敗"); }
+            } catch(err) { 
+                console.error(err); 
+                alert("讀取失敗：\n" + err.message); 
+            }
         };
         reader.readAsText(file);
     });
@@ -1034,3 +1141,4 @@
 </script>
 </body>
 </html>
+ 
